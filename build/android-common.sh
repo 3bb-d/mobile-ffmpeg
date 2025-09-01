@@ -1,20 +1,6 @@
 #!/bin/bash
 
-get_cpu_count() {
-    if [ "$(uname)" == "Darwin" ]; then
-        echo $(sysctl -n hw.physicalcpu)
-    else
-        echo $(nproc)
-    fi
-}
-
-prepare_inline_sed() {
-    if [ "$(uname)" == "Darwin" ]; then
-        export SED_INLINE="sed -i .tmp"
-    else
-        export SED_INLINE="sed -i"
-    fi
-}
+source "${BASEDIR}/build/arch-common.sh"
 
 get_library_name() {
     case $1 in
@@ -40,27 +26,32 @@ get_library_name() {
         19) echo "xvidcore" ;;
         20) echo "x265" ;;
         21) echo "libvidstab" ;;
-        22) echo "libilbc" ;;
-        23) echo "opus" ;;
-        24) echo "snappy" ;;
-        25) echo "soxr" ;;
-        26) echo "libaom" ;;
-        27) echo "chromaprint" ;;
-        28) echo "twolame" ;;
-        29) echo "sdl" ;;
-        30) echo "tesseract" ;;
-        31) echo "giflib" ;;
-        32) echo "jpeg" ;;
-        33) echo "libogg" ;;
-        34) echo "libpng" ;;
-        35) echo "libuuid" ;;
-        36) echo "nettle" ;;
-        37) echo "tiff" ;;
-        38) echo "expat" ;;
-        39) echo "libsndfile" ;;
-        40) echo "leptonica" ;;
-        41) echo "android-zlib" ;;
-        42) echo "android-media-codec" ;;
+        22) echo "rubberband" ;;
+        23) echo "libilbc" ;;
+        24) echo "opus" ;;
+        25) echo "snappy" ;;
+        26) echo "soxr" ;;
+        27) echo "libaom" ;;
+        28) echo "chromaprint" ;;
+        29) echo "twolame" ;;
+        30) echo "sdl" ;;
+        31) echo "tesseract" ;;
+        32) echo "openh264" ;;
+        33) echo "vo-amrwbenc" ;;
+        34) echo "giflib" ;;
+        35) echo "jpeg" ;;
+        36) echo "libogg" ;;
+        37) echo "libpng" ;;
+        38) echo "libuuid" ;;
+        39) echo "nettle" ;;
+        40) echo "tiff" ;;
+        41) echo "expat" ;;
+        42) echo "libsndfile" ;;
+        43) echo "leptonica" ;;
+        44) echo "libsamplerate" ;;
+        45) echo "android-zlib" ;;
+        46) echo "android-media-codec" ;;
+        47) echo "cpu-features" ;;
     esac
 }
 
@@ -74,7 +65,7 @@ get_arch_name() {
     esac
 }
 
-get_target_host() {
+get_build_host() {
     case ${ARCH} in
         arm-v7a | arm-v7a-neon)
             echo "arm-linux-androideabi"
@@ -91,21 +82,40 @@ get_target_host() {
     esac
 }
 
-get_toolchain() {
+
+get_clang_target_host() {
     case ${ARCH} in
         arm-v7a | arm-v7a-neon)
-            echo "arm"
+            echo "armv7a-linux-androideabi${API}"
         ;;
         arm64-v8a)
-            echo "aarch64"
+            echo "aarch64-linux-android${API}"
         ;;
         x86)
-            echo "i686"
+            echo "i686-linux-android${API}"
         ;;
         x86-64)
-            echo "x86_64"
+            echo "x86_64-linux-android${API}"
         ;;
     esac
+}
+
+get_toolchain() {
+    HOST_OS=$(uname -s)
+    case ${HOST_OS} in
+        Darwin) HOST_OS=darwin;;
+        Linux) HOST_OS=linux;;
+        FreeBsd) HOST_OS=freebsd;;
+        CYGWIN*|*_NT-*) HOST_OS=cygwin;;
+    esac
+
+    HOST_ARCH=$(uname -m)
+    case ${HOST_ARCH} in
+        i?86) HOST_ARCH=x86;;
+        x86_64|amd64) HOST_ARCH=x86_64;;
+    esac
+
+    echo "${HOST_OS}-${HOST_ARCH}"
 }
 
 get_cmake_target_processor() {
@@ -180,41 +190,50 @@ get_android_arch() {
 }
 
 get_common_includes() {
-    echo "-I${ANDROID_NDK_ROOT}/toolchains/mobile-ffmpeg-api-${API}-${TOOLCHAIN}/sysroot/usr/include -I${ANDROID_NDK_ROOT}/toolchains/mobile-ffmpeg-api-${API}-${TOOLCHAIN}/sysroot/usr/local/include"
+    echo ""
 }
 
 get_common_cflags() {
-    echo "-fstrict-aliasing -fPIC -DANDROID -D__ANDROID__ -D__ANDROID_API__=${API}"
+    if [[ ! -z ${MOBILE_FFMPEG_LTS_BUILD} ]]; then
+        local LTS_BUILD__FLAG="-DMOBILE_FFMPEG_LTS "
+    fi
+
+    echo "-fno-integrated-as -fstrict-aliasing -fPIC -DANDROID ${LTS_BUILD__FLAG}-D__ANDROID__ -D__ANDROID_API__=${API}"
 }
 
 get_arch_specific_cflags() {
     case ${ARCH} in
         arm-v7a)
-            echo "-march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=softfp"
+            echo "-march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=softfp -DMOBILE_FFMPEG_ARM_V7A"
         ;;
         arm-v7a-neon)
-            echo "-march=armv7-a -mfpu=neon -mfloat-abi=softfp"
+            echo "-march=armv7-a -mfpu=neon -mfloat-abi=softfp -DMOBILE_FFMPEG_ARM_V7A_NEON"
         ;;
         arm64-v8a)
-            echo "-march=armv8-a"
+            echo "-march=armv8-a -DMOBILE_FFMPEG_ARM64_V8A"
         ;;
         x86)
-            echo "-march=i686 -mtune=intel -mssse3 -mfpmath=sse -m32"
+            echo "-march=i686 -mtune=intel -mssse3 -mfpmath=sse -m32 -DMOBILE_FFMPEG_X86"
         ;;
         x86-64)
-            echo "-march=x86-64 -msse4.2 -mpopcnt -m64 -mtune=intel"
+            echo "-march=x86-64 -msse4.2 -mpopcnt -m64 -mtune=intel -DMOBILE_FFMPEG_X86_64"
         ;;
     esac
 }
 
 get_size_optimization_cflags() {
+    if [[ -z ${NO_LINK_TIME_OPTIMIZATION} ]]; then
+        local LINK_TIME_OPTIMIZATION_FLAGS="-flto"
+    else
+        local LINK_TIME_OPTIMIZATION_FLAGS=""
+    fi
 
-    ARCH_OPTIMIZATION=""
+    local ARCH_OPTIMIZATION=""
     case ${ARCH} in
         arm-v7a | arm-v7a-neon)
             case $1 in
                 ffmpeg)
-                    ARCH_OPTIMIZATION="-flto -O2 -ffunction-sections -fdata-sections"
+                    ARCH_OPTIMIZATION="${LINK_TIME_OPTIMIZATION_FLAGS} -O2 -ffunction-sections -fdata-sections"
                 ;;
                 *)
                     ARCH_OPTIMIZATION="-Os -ffunction-sections -fdata-sections"
@@ -223,8 +242,8 @@ get_size_optimization_cflags() {
         ;;
         arm64-v8a)
             case $1 in
-                ffmpeg | nettle)
-                    ARCH_OPTIMIZATION="-flto -fuse-ld=gold -O2 -ffunction-sections -fdata-sections"
+                ffmpeg)
+                    ARCH_OPTIMIZATION="${LINK_TIME_OPTIMIZATION_FLAGS} -fuse-ld=gold -O2 -ffunction-sections -fdata-sections"
                 ;;
                 *)
                     ARCH_OPTIMIZATION="-Os -ffunction-sections -fdata-sections"
@@ -234,7 +253,7 @@ get_size_optimization_cflags() {
         x86 | x86-64)
             case $1 in
                 ffmpeg)
-                    ARCH_OPTIMIZATION="-flto -Os -ffunction-sections -fdata-sections"
+                    ARCH_OPTIMIZATION="${LINK_TIME_OPTIMIZATION_FLAGS} -Os -ffunction-sections -fdata-sections"
                 ;;
                 *)
                     ARCH_OPTIMIZATION="-Os -ffunction-sections -fdata-sections"
@@ -243,14 +262,13 @@ get_size_optimization_cflags() {
         ;;
     esac
 
-    LIB_OPTIMIZATION=""
+    local LIB_OPTIMIZATION=""
 
     echo "${ARCH_OPTIMIZATION} ${LIB_OPTIMIZATION}"
 }
 
 get_app_specific_cflags() {
-
-    APP_FLAGS=""
+    local APP_FLAGS=""
     case $1 in
         xvidcore)
             APP_FLAGS=""
@@ -258,14 +276,17 @@ get_app_specific_cflags() {
         ffmpeg)
             APP_FLAGS="-Wno-unused-function -DBIONIC_IOCTL_NO_SIGNEDNESS_OVERLOAD"
         ;;
+        kvazaar)
+            APP_FLAGS="-std=gnu99 -Wno-unused-function"
+        ;;
+        rubberband)
+            APP_FLAGS="-std=c99 -Wno-unused-function"
+        ;;
         shine)
             APP_FLAGS="-Wno-unused-function"
         ;;
         soxr | snappy | libwebp)
             APP_FLAGS="-std=gnu99 -Wno-unused-function -DPIC"
-        ;;
-        kvazaar)
-            APP_FLAGS="-std=gnu99 -Wno-unused-function"
         ;;
         *)
             APP_FLAGS="-std=c99 -Wno-unused-function"
@@ -276,48 +297,74 @@ get_app_specific_cflags() {
 }
 
 get_cflags() {
-    ARCH_FLAGS=$(get_arch_specific_cflags)
-    APP_FLAGS=$(get_app_specific_cflags $1)
-    COMMON_FLAGS=$(get_common_cflags)
+    local ARCH_FLAGS=$(get_arch_specific_cflags)
+    local APP_FLAGS=$(get_app_specific_cflags $1)
+    local COMMON_FLAGS=$(get_common_cflags)
     if [[ -z ${MOBILE_FFMPEG_DEBUG} ]]; then
-        OPTIMIZATION_FLAGS=$(get_size_optimization_cflags $1)
+        local OPTIMIZATION_FLAGS=$(get_size_optimization_cflags $1)
     else
-        OPTIMIZATION_FLAGS=""
+        local OPTIMIZATION_FLAGS="${MOBILE_FFMPEG_DEBUG}"
     fi
-    COMMON_INCLUDES=$(get_common_includes)
+    local COMMON_INCLUDES=$(get_common_includes)
 
     echo "${ARCH_FLAGS} ${APP_FLAGS} ${COMMON_FLAGS} ${OPTIMIZATION_FLAGS} ${COMMON_INCLUDES}"
 }
 
 get_cxxflags() {
+    if [[ -z ${NO_LINK_TIME_OPTIMIZATION} ]]; then
+        local LINK_TIME_OPTIMIZATION_FLAGS="-flto"
+    else
+        local LINK_TIME_OPTIMIZATION_FLAGS=""
+    fi
+
+    if [[ -z ${MOBILE_FFMPEG_DEBUG} ]]; then
+        local OPTIMIZATION_FLAGS="-Os -ffunction-sections -fdata-sections"
+    else
+        local OPTIMIZATION_FLAGS="${MOBILE_FFMPEG_DEBUG}"
+    fi
+
     case $1 in
         gnutls)
-            echo "-std=c++11 -fno-rtti -Os -ffunction-sections -fdata-sections"
+            echo "-std=c++11 -fno-rtti ${OPTIMIZATION_FLAGS}"
         ;;
         ffmpeg)
-            echo "-std=c++11 -fno-exceptions -fno-rtti -flto -O2 -ffunction-sections -fdata-sections"
+            if [[ -z ${MOBILE_FFMPEG_DEBUG} ]]; then
+                echo "-std=c++11 -fno-exceptions -fno-rtti ${LINK_TIME_OPTIMIZATION_FLAGS} -O2 -ffunction-sections -fdata-sections"
+            else
+                echo "-std=c++11 -fno-exceptions -fno-rtti ${MOBILE_FFMPEG_DEBUG}"
+            fi
         ;;
         opencore-amr)
-            echo "-Os -ffunction-sections -fdata-sections"
+            echo "${OPTIMIZATION_FLAGS}"
         ;;
         x265)
-            echo "-std=c++11 -fno-exceptions -Os -ffunction-sections -fdata-sections"
+            echo "-std=c++11 -fno-exceptions ${OPTIMIZATION_FLAGS}"
+        ;;
+        rubberband)
+            echo "-std=c++11 ${OPTIMIZATION_FLAGS}"
         ;;
         *)
-            echo "-std=c++11 -fno-exceptions -fno-rtti -Os -ffunction-sections -fdata-sections"
+            echo "-std=c++11 -fno-exceptions -fno-rtti ${OPTIMIZATION_FLAGS}"
         ;;
     esac
 }
 
 get_common_linked_libraries() {
-    local COMMON_LIBRARY_PATHS="-L${ANDROID_NDK_ROOT}/toolchains/mobile-ffmpeg-api-${API}-${TOOLCHAIN}/${TARGET_HOST}/lib -L${ANDROID_NDK_ROOT}/toolchains/mobile-ffmpeg-api-${API}-${TOOLCHAIN}/sysroot/usr/lib -L${ANDROID_NDK_ROOT}/toolchains/mobile-ffmpeg-api-${API}-${TOOLCHAIN}/lib"
+    local COMMON_LIBRARY_PATHS="-L${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/${TOOLCHAIN}/${BUILD_HOST}/lib -L${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/${TOOLCHAIN}/sysroot/usr/lib/${BUILD_HOST}/${API} -L${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/${TOOLCHAIN}/lib"
 
     case $1 in
-        ffmpeg | tesseract)
-            echo "-lc -lm -ldl -llog -lc++_shared ${COMMON_LIBRARY_PATHS}"
+        ffmpeg)
+            if [[ -z ${MOBILE_FFMPEG_LTS_BUILD} ]]; then
+                echo "-lc -lm -ldl -llog -lcamera2ndk -lmediandk ${COMMON_LIBRARY_PATHS}"
+            else
+                echo "-lc -lm -ldl -llog ${COMMON_LIBRARY_PATHS}"
+            fi
         ;;
         libvpx)
             echo "-lc -lm ${COMMON_LIBRARY_PATHS}"
+        ;;
+        tesseract | x265)
+            echo "-lc -lm -ldl -llog -lc++_shared ${COMMON_LIBRARY_PATHS}"
         ;;
         *)
             echo "-lc -lm -ldl -llog ${COMMON_LIBRARY_PATHS}"
@@ -326,11 +373,17 @@ get_common_linked_libraries() {
 }
 
 get_size_optimization_ldflags() {
+    if [[ -z ${NO_LINK_TIME_OPTIMIZATION} ]]; then
+        local LINK_TIME_OPTIMIZATION_FLAGS="-flto"
+    else
+        local LINK_TIME_OPTIMIZATION_FLAGS=""
+    fi
+
     case ${ARCH} in
         arm64-v8a)
             case $1 in
-                ffmpeg | nettle)
-                    echo "-Wl,--gc-sections -flto -fuse-ld=gold -O2 -ffunction-sections -fdata-sections -finline-functions"
+                ffmpeg)
+                    echo "-Wl,--gc-sections ${LINK_TIME_OPTIMIZATION_FLAGS} -fuse-ld=gold -O2 -ffunction-sections -fdata-sections -finline-functions"
                 ;;
                 *)
                     echo "-Wl,--gc-sections -Os -ffunction-sections -fdata-sections"
@@ -340,7 +393,7 @@ get_size_optimization_ldflags() {
         *)
             case $1 in
                 ffmpeg)
-                    echo "-Wl,--gc-sections,--icf=safe -flto -O2 -ffunction-sections -fdata-sections -finline-functions"
+                    echo "-Wl,--gc-sections,--icf=safe ${LINK_TIME_OPTIMIZATION_FLAGS} -O2 -ffunction-sections -fdata-sections -finline-functions"
                 ;;
                 *)
                     echo "-Wl,--gc-sections,--icf=safe -Os -ffunction-sections -fdata-sections"
@@ -371,11 +424,15 @@ get_arch_specific_ldflags() {
 }
 
 get_ldflags() {
-    ARCH_FLAGS=$(get_arch_specific_ldflags)
-    OPTIMIZATION_FLAGS=$(get_size_optimization_ldflags $1)
-    COMMON_LINKED_LIBS=$(get_common_linked_libraries $1)
+    local ARCH_FLAGS=$(get_arch_specific_ldflags)
+    if [[ -z ${MOBILE_FFMPEG_DEBUG} ]]; then
+        local OPTIMIZATION_FLAGS="$(get_size_optimization_ldflags $1)"
+    else
+        local OPTIMIZATION_FLAGS="${MOBILE_FFMPEG_DEBUG}"
+    fi
+    local COMMON_LINKED_LIBS=$(get_common_linked_libraries $1)
 
-    echo "${ARCH_FLAGS} ${OPTIMIZATION_FLAGS} ${COMMON_LINKED_LIBS}"
+    echo "${ARCH_FLAGS} ${OPTIMIZATION_FLAGS} ${COMMON_LINKED_LIBS} -Wl,--hash-style=both -Wl,--exclude-libs,libgcc.a -Wl,--exclude-libs,libunwind.a"
 }
 
 create_chromaprint_package_config() {
@@ -608,25 +665,6 @@ Cflags: -I\${includedir}
 EOF
 }
 
-create_libwebp_package_config() {
-    local LIB_WEBP_VERSION="$1"
-
-    cat > "${INSTALL_PKG_CONFIG_DIR}/libwebp.pc" << EOF
-prefix=${BASEDIR}/prebuilt/android-$(get_target_build)/libwebp
-exec_prefix=\${prefix}
-libdir=\${prefix}/lib
-includedir=\${prefix}/include
-
-Name: libwebp
-Description: webp codec library
-Version: ${LIB_WEBP_VERSION}
-
-Requires:
-Libs: -L\${libdir} -lwebp -lwebpdecoder -lwebpdemux
-Cflags: -I\${includedir}
-EOF
-}
-
 create_libxml2_package_config() {
     local LIBXML2_VERSION="$1"
 
@@ -661,7 +699,7 @@ Description: a fast compressor/decompressor
 Version: ${SNAPPY_VERSION}
 
 Requires:
-Libs: -L\${libdir} -lz
+Libs: -L\${libdir} -lz -lc++
 Cflags: -I\${includedir}
 EOF
 }
@@ -703,7 +741,7 @@ URL: https://github.com/tesseract-ocr/tesseract
 Version: ${TESSERACT_VERSION}
 
 Requires: lept, libjpeg, libpng, giflib, zlib, libwebp, libtiff-4
-Libs: -L\${libdir} -ltesseract
+Libs: -L\${libdir} -ltesseract -lc++_shared
 Cflags: -I\${includedir}
 EOF
 }
@@ -741,7 +779,7 @@ Version: ${X265_VERSION}
 
 Requires:
 Libs: -L\${libdir} -lx265
-Libs.private: -lm -lgcc -lgcc -ldl -lgcc -lgcc -ldl
+Libs.private: -lm -lgcc -lgcc -ldl -lgcc -lgcc -ldl -lc++_shared
 Cflags: -I\${includedir}
 EOF
 }
@@ -765,11 +803,11 @@ Cflags: -I\${includedir}
 EOF
 }
 
-create_zlib_package_config() {
-    ZLIB_VERSION=$(grep '#define ZLIB_VERSION' ${ANDROID_NDK_ROOT}/toolchains/mobile-ffmpeg-api-${API}-${TOOLCHAIN}/sysroot/usr/include/zlib.h | grep -Eo '\".*\"' | sed -e 's/\"//g')
+create_zlib_system_package_config() {
+    ZLIB_VERSION=$(grep '#define ZLIB_VERSION' ${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/${TOOLCHAIN}/sysroot/usr/include/zlib.h | grep -Eo '\".*\"' | sed -e 's/\"//g')
 
     cat > "${INSTALL_PKG_CONFIG_DIR}/zlib.pc" << EOF
-prefix=${ANDROID_NDK_ROOT}/toolchains/mobile-ffmpeg-api-${API}-${TOOLCHAIN}/sysroot/usr
+prefix=${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/${TOOLCHAIN}/sysroot/usr
 exec_prefix=\${prefix}
 libdir=${ANDROID_NDK_ROOT}/platforms/android-${API}/arch-${TOOLCHAIN_ARCH}/usr/lib
 includedir=\${prefix}/include
@@ -785,168 +823,75 @@ EOF
 }
 
 create_cpufeatures_package_config() {
-    cat > "${INSTALL_PKG_CONFIG_DIR}/cpufeatures.pc" << EOF
-prefix=${ANDROID_NDK_ROOT}/sources/android/cpufeatures
-exec_prefix=\${prefix}
-libdir=\${exec_prefix}
-includedir=\${prefix}
+    cat > "${INSTALL_PKG_CONFIG_DIR}/cpu-features.pc" << EOF
+prefix=${BASEDIR}/prebuilt/android-$(get_target_build)/cpu-features
+exec_prefix=\${prefix}/bin
+libdir=\${prefix}/lib
+includedir=\${prefix}/include/ndk_compat
 
 Name: cpufeatures
-Description: cpu features Android utility
+URL: https://github.com/google/cpu_features
+Description: cpu_features Android compatibility library
 Version: 1.${API}
 
 Requires:
-Libs: -L\${libdir} -lcpufeatures
+Libs: -L\${libdir} -lndk_compat
 Cflags: -I\${includedir}
 EOF
 }
 
-#
-# download <url> <local file name> <on error action>
-#
-download() {
-    if [ ! -d "${MOBILE_FFMPEG_TMPDIR}" ]; then
-        mkdir -p "${MOBILE_FFMPEG_TMPDIR}"
-    fi
-
-    (curl --fail --location $1 -o ${MOBILE_FFMPEG_TMPDIR}/$2 1>>${BASEDIR}/build.log 2>&1)
-
-    local RC=$?
-
-    if [ ${RC} -eq 0 ]; then
-        echo -e "\nDEBUG: Downloaded $1 to ${MOBILE_FFMPEG_TMPDIR}/$2\n" 1>>${BASEDIR}/build.log 2>&1
-    else
-        rm -f ${MOBILE_FFMPEG_TMPDIR}/$2 1>>${BASEDIR}/build.log 2>&1
-
-        echo -e -n "\nINFO: Failed to download $1 to ${MOBILE_FFMPEG_TMPDIR}/$2, rc=${RC}. " 1>>${BASEDIR}/build.log 2>&1
-
-        if [ "$3" == "exit" ]; then
-            echo -e "DEBUG: Build will now exit.\n" 1>>${BASEDIR}/build.log 2>&1
-            exit 1
-        else
-            echo -e "DEBUG: Build will continue.\n" 1>>${BASEDIR}/build.log 2>&1
-        fi
-    fi
-
-    echo ${RC}
-}
-
-download_gpl_library_source() {
-    local GPL_LIB_URL=""
-    local GPL_LIB_FILE=""
-    local GPL_LIB_ORIG_DIR=""
-    local GPL_LIB_DEST_DIR=""
-
-    echo -e "\nDEBUG: Downloading GPL library source: $1\n" 1>>${BASEDIR}/build.log 2>&1
-
-    case $1 in
-        libvidstab)
-            GPL_LIB_URL="https://github.com/georgmartius/vid.stab/archive/v1.1.0.tar.gz"
-            GPL_LIB_FILE="v1.1.0.tar.gz"
-            GPL_LIB_ORIG_DIR="vid.stab-1.1.0"
-            GPL_LIB_DEST_DIR="libvidstab"
+android_ndk_abi() { # to be used with CMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake
+    case ${ARCH} in
+        arm-v7a | arm-v7a-neon)
+            echo "armeabi-v7a"
         ;;
-        x264)
-            GPL_LIB_URL="ftp://ftp.videolan.org/pub/videolan/x264/snapshots/x264-snapshot-20181208-2245-stable.tar.bz2"
-            GPL_LIB_FILE="x264-snapshot-20181208-2245-stable.tar.bz2"
-            GPL_LIB_ORIG_DIR="x264-snapshot-20181208-2245-stable"
-            GPL_LIB_DEST_DIR="x264"
+        arm64-v8a)
+            echo "arm64-v8a"
         ;;
-        x265)
-            GPL_LIB_URL="https://download.videolan.org/pub/videolan/x265/x265_2.9.tar.gz"
-            GPL_LIB_FILE="x265-2.9.tar.gz"
-            GPL_LIB_ORIG_DIR="x265_2.9"
-            GPL_LIB_DEST_DIR="x265"
+        x86)
+            echo "x86"
         ;;
-        xvidcore)
-            GPL_LIB_URL="https://downloads.xvid.com/downloads/xvidcore-1.3.5.tar.gz"
-            GPL_LIB_FILE="xvidcore-1.3.5.tar.gz"
-            GPL_LIB_ORIG_DIR="xvidcore"
-            GPL_LIB_DEST_DIR="xvidcore"
+        x86-64)
+            echo "x86_64"
         ;;
     esac
+}
 
-    local GPL_LIB_SOURCE_PATH="${BASEDIR}/src/${GPL_LIB_DEST_DIR}"
+android_build_dir() {
+  echo ${BASEDIR}/android/build/${LIB_NAME}/$(get_target_build)
+}
 
-    if [ -d "${GPL_LIB_SOURCE_PATH}" ]; then
-        echo -e "INFO: $1 already downloaded. Source folder found at ${GPL_LIB_SOURCE_PATH}\n" 1>>${BASEDIR}/build.log 2>&1
-        echo 0
-        return
+android_ndk_cmake() {
+    local cmake=$(find ${ANDROID_HOME}/cmake -path \*/bin/cmake -type f -print -quit)
+    if [[ -z ${cmake} ]]; then
+        cmake=$(which cmake)
+    fi
+    if [[ -z ${cmake} ]]; then
+        cmake="missing_cmake"
     fi
 
-    local GPL_LIB_PACKAGE_PATH="${MOBILE_FFMPEG_TMPDIR}/${GPL_LIB_FILE}"
-
-    echo -e "DEBUG: $1 source not found. Checking if library package ${GPL_LIB_FILE} is downloaded at ${GPL_LIB_PACKAGE_PATH} \n" 1>>${BASEDIR}/build.log 2>&1
-
-    if [ ! -f "${GPL_LIB_PACKAGE_PATH}" ]; then
-        echo -e "DEBUG: $1 library package not found. Downloading from ${GPL_LIB_URL}\n" 1>>${BASEDIR}/build.log 2>&1
-
-        local DOWNLOAD_RC=$(download "${GPL_LIB_URL}" "${GPL_LIB_FILE}")
-
-        if [ ${DOWNLOAD_RC} -ne 0 ]; then
-            echo -e "INFO: Downloading GPL library $1 failed. Can not get library package from ${GPL_LIB_URL}\n" 1>>${BASEDIR}/build.log 2>&1
-            echo ${DOWNLOAD_RC}
-            return
-        else
-            echo -e "DEBUG: $1 library package downloaded\n" 1>>${BASEDIR}/build.log 2>&1
-        fi
-    else
-        echo -e "DEBUG: $1 library package already downloaded\n" 1>>${BASEDIR}/build.log 2>&1
-    fi
-
-    local EXTRACT_COMMAND=""
-
-    if [[ ${GPL_LIB_FILE} == *bz2 ]]; then
-        EXTRACT_COMMAND="tar jxf ${GPL_LIB_PACKAGE_PATH} --directory ${MOBILE_FFMPEG_TMPDIR}"
-    else
-        EXTRACT_COMMAND="tar zxf ${GPL_LIB_PACKAGE_PATH} --directory ${MOBILE_FFMPEG_TMPDIR}"
-    fi
-
-    echo -e "DEBUG: Extracting library package ${GPL_LIB_FILE} inside ${MOBILE_FFMPEG_TMPDIR}\n" 1>>${BASEDIR}/build.log 2>&1
-
-    ${EXTRACT_COMMAND} 1>>${BASEDIR}/build.log 2>&1
-
-    local EXTRACT_RC=$?
-
-    if [ ${EXTRACT_RC} -ne 0 ]; then
-        echo -e "\nINFO: Downloading GPL library $1 failed. Extract for library package ${GPL_LIB_FILE} completed with rc=${EXTRACT_RC}. Deleting failed files.\n" 1>>${BASEDIR}/build.log 2>&1
-        rm -f ${GPL_LIB_PACKAGE_PATH} 1>>${BASEDIR}/build.log 2>&1
-        rm -rf ${MOBILE_FFMPEG_TMPDIR}/${GPL_LIB_ORIG_DIR} 1>>${BASEDIR}/build.log 2>&1
-        echo ${EXTRACT_RC}
-        return
-    fi
-
-    echo -e "DEBUG: Extract completed. Copying library source to ${GPL_LIB_SOURCE_PATH}\n" 1>>${BASEDIR}/build.log 2>&1
-
-    COPY_COMMAND="cp -r ${MOBILE_FFMPEG_TMPDIR}/${GPL_LIB_ORIG_DIR} ${GPL_LIB_SOURCE_PATH}"
-
-    ${COPY_COMMAND} 1>>${BASEDIR}/build.log 2>&1
-
-    local COPY_RC=$?
-
-    if [ ${COPY_RC} -eq 0 ]; then
-        echo -e "DEBUG: Downloading GPL library source $1 completed successfully\n" 1>>${BASEDIR}/build.log 2>&1
-    else
-        echo -e "\nINFO: Downloading GPL library $1 failed. Copying library source to ${GPL_LIB_SOURCE_PATH} completed with rc=${COPY_RC}\n" 1>>${BASEDIR}/build.log 2>&1
-        rm -rf ${GPL_LIB_SOURCE_PATH} 1>>${BASEDIR}/build.log 2>&1
-        echo ${COPY_RC}
-        return
-    fi
+    echo ${cmake} \
+  -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_ROOT}/build/cmake/android.toolchain.cmake \
+  -H${BASEDIR}/src/${LIB_NAME} \
+  -B$(android_build_dir) \
+  -DANDROID_ABI=$(android_ndk_abi) \
+  -DANDROID_PLATFORM=android-${API} \
+  -DCMAKE_INSTALL_PREFIX=${BASEDIR}/prebuilt/android-$(get_target_build)/${LIB_NAME}
 }
 
 set_toolchain_clang_paths() {
-    export PATH=$PATH:${ANDROID_NDK_ROOT}/toolchains/mobile-ffmpeg-api-${API}-${TOOLCHAIN}/bin
+    export PATH=$PATH:${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/${TOOLCHAIN}/bin
 
-    TARGET_HOST=$(get_target_host)
+    BUILD_HOST=$(get_build_host)
     
-    export AR=${TARGET_HOST}-ar
-    export CC=${TARGET_HOST}-clang
-    export CXX=${TARGET_HOST}-clang++
+    export AR=${BUILD_HOST}-ar
+    export CC=$(get_clang_target_host)-clang
+    export CXX=$(get_clang_target_host)-clang++
 
     if [ "$1" == "x264" ]; then
         export AS=${CC}
     else
-        export AS=${TARGET_HOST}-as
+        export AS=${BUILD_HOST}-as
     fi
 
     case ${ARCH} in
@@ -955,9 +900,9 @@ set_toolchain_clang_paths() {
         ;;
     esac
 
-    export LD=${TARGET_HOST}-ld
-    export RANLIB=${TARGET_HOST}-ranlib
-    export STRIP=${TARGET_HOST}-strip
+    export LD=${BUILD_HOST}-ld
+    export RANLIB=${BUILD_HOST}-ranlib
+    export STRIP=${BUILD_HOST}-strip
 
     export INSTALL_PKG_CONFIG_DIR="${BASEDIR}/prebuilt/android-$(get_target_build)/pkgconfig"
     export ZLIB_PACKAGE_CONFIG_PATH="${INSTALL_PKG_CONFIG_DIR}/zlib.pc"
@@ -967,141 +912,30 @@ set_toolchain_clang_paths() {
     fi
 
     if [ ! -f ${ZLIB_PACKAGE_CONFIG_PATH} ]; then
-        create_zlib_package_config
+        create_zlib_system_package_config
     fi
 
     prepare_inline_sed
 }
 
-create_toolchain() {
-    local TOOLCHAIN_DIR="${ANDROID_NDK_ROOT}/toolchains/mobile-ffmpeg-api-${API}-"${TOOLCHAIN}
-
-    if [ ! -d ${TOOLCHAIN_DIR} ]; then
-        ${ANDROID_NDK_ROOT}/build/tools/make_standalone_toolchain.py --arch ${TOOLCHAIN_ARCH} --api ${API} --stl libc++ --install-dir ${TOOLCHAIN_DIR} || exit 1
-    fi
-}
-
-build_cpufeatures() {
+build_android_lts_support() {
 
     # CLEAN OLD BUILD
-    rm -f ${ANDROID_NDK_ROOT}/sources/android/cpufeatures/cpu-features.o 1>>${BASEDIR}/build.log 2>&1
-    rm -f ${ANDROID_NDK_ROOT}/sources/android/cpufeatures/libcpufeatures.a 1>>${BASEDIR}/build.log 2>&1
-    rm -f ${ANDROID_NDK_ROOT}/sources/android/cpufeatures/libcpufeatures.so 1>>${BASEDIR}/build.log 2>&1
+    rm -f ${BASEDIR}/android/app/src/main/cpp/android_lts_support.o 1>>${BASEDIR}/build.log 2>&1
+    rm -f ${BASEDIR}/android/app/src/main/cpp/android_lts_support.a 1>>${BASEDIR}/build.log 2>&1
 
-    set_toolchain_clang_paths "cpu-features"
+    echo -e "INFO: Building android-lts-support objects for ${ARCH}\n" 1>>${BASEDIR}/build.log 2>&1
 
-    echo -e "\nINFO: Building cpu-features for for ${ARCH}\n" 1>>${BASEDIR}/build.log 2>&1
+    # PREPARING PATHS
+    LIB_NAME="android-lts-support"
+    set_toolchain_clang_paths ${LIB_NAME}
+
+    # PREPARING FLAGS
+    BUILD_HOST=$(get_build_host)
+    CFLAGS=$(get_cflags ${LIB_NAME})
+    LDFLAGS=$(get_ldflags ${LIB_NAME})
 
     # THEN BUILD FOR THIS ABI
-    ${TARGET_HOST}-clang -c ${ANDROID_NDK_ROOT}/sources/android/cpufeatures/cpu-features.c -o ${ANDROID_NDK_ROOT}/sources/android/cpufeatures/cpu-features.o 1>>${BASEDIR}/build.log 2>&1
-    ${TARGET_HOST}-ar rcs ${ANDROID_NDK_ROOT}/sources/android/cpufeatures/libcpufeatures.a ${ANDROID_NDK_ROOT}/sources/android/cpufeatures/cpu-features.o 1>>${BASEDIR}/build.log 2>&1
-    ${TARGET_HOST}-clang -shared ${ANDROID_NDK_ROOT}/sources/android/cpufeatures/cpu-features.o -o ${ANDROID_NDK_ROOT}/sources/android/cpufeatures/libcpufeatures.so 1>>${BASEDIR}/build.log 2>&1
-
-    create_cpufeatures_package_config
-}
-
-autoreconf_library() {
-    echo -e "\nDEBUG: Running full autoreconf for $1\n" 1>>${BASEDIR}/build.log 2>&1
-
-    # TRY FULL RECONF
-    (autoreconf --force --install)
-
-    local EXTRACT_RC=$?
-    if [ ${EXTRACT_RC} -eq 0 ]; then
-        return
-    fi
-
-    echo -e "\nDEBUG: Full autoreconf failed. Running full autoreconf with include for $1\n" 1>>${BASEDIR}/build.log 2>&1
-
-    # TRY FULL RECONF WITH m4
-    (autoreconf --force --install -I m4)
-
-    EXTRACT_RC=$?
-    if [ ${EXTRACT_RC} -eq 0 ]; then
-        return
-    fi
-
-    echo -e "\nDEBUG: Full autoreconf with include failed. Running autoreconf without force for $1\n" 1>>${BASEDIR}/build.log 2>&1
-
-    # TRY RECONF WITHOUT FORCE
-    (autoreconf --install)
-
-    EXTRACT_RC=$?
-    if [ ${EXTRACT_RC} -eq 0 ]; then
-        return
-    fi
-
-    echo -e "\nDEBUG: Autoreconf without force failed. Running autoreconf without force with include for $1\n" 1>>${BASEDIR}/build.log 2>&1
-
-    # TRY RECONF WITHOUT FORCE WITH m4
-    (autoreconf --install -I m4)
-
-    EXTRACT_RC=$?
-    if [ ${EXTRACT_RC} -eq 0 ]; then
-        return
-    fi
-
-    echo -e "\nDEBUG: Autoreconf without force with include failed. Running default autoreconf for $1\n" 1>>${BASEDIR}/build.log 2>&1
-
-    # TRY DEFAULT RECONF
-    (autoreconf)
-
-    EXTRACT_RC=$?
-    if [ ${EXTRACT_RC} -eq 0 ]; then
-        return
-    fi
-
-    echo -e "\nDEBUG: Default autoreconf failed. Running default autoreconf with include for $1\n" 1>>${BASEDIR}/build.log 2>&1
-
-    # TRY DEFAULT RECONF WITH m4
-    (autoreconf -I m4)
-
-    EXTRACT_RC=$?
-    if [ ${EXTRACT_RC} -eq 0 ]; then
-        return
-    fi
-}
-
-library_is_installed() {
-    local INSTALL_PATH=$1
-    local LIB_NAME=$2
-
-    echo -e "DEBUG: Checking if ${LIB_NAME} is already built and installed at ${INSTALL_PATH}/${LIB_NAME}\n" 1>>${BASEDIR}/build.log 2>&1
-
-    if [ ! -d ${INSTALL_PATH}/${LIB_NAME} ]; then
-        echo -e "DEBUG: ${INSTALL_PATH}/${LIB_NAME} directory not found\n" 1>>${BASEDIR}/build.log 2>&1
-        echo 1
-        return
-    fi
-
-    if [ ! -d ${INSTALL_PATH}/${LIB_NAME}/lib ]; then
-        echo -e "DEBUG: ${INSTALL_PATH}/${LIB_NAME}/lib directory not found\n" 1>>${BASEDIR}/build.log 2>&1
-        echo 1
-        return
-    fi
-
-    if [ ! -d ${INSTALL_PATH}/${LIB_NAME}/include ]; then
-        echo -e "DEBUG: ${INSTALL_PATH}/${LIB_NAME}/include directory not found\n" 1>>${BASEDIR}/build.log 2>&1
-        echo 1
-        return
-    fi
-
-    local HEADER_COUNT=$(ls -l ${INSTALL_PATH}/${LIB_NAME}/include | wc -l)
-    local LIB_COUNT=$(ls -l ${INSTALL_PATH}/${LIB_NAME}/lib | wc -l)
-
-    if [[ ${HEADER_COUNT} -eq 0 ]]; then
-        echo -e "DEBUG: No headers found under ${INSTALL_PATH}/${LIB_NAME}/include\n" 1>>${BASEDIR}/build.log 2>&1
-        echo 1
-        return
-    fi
-
-    if [[ ${LIB_COUNT} -eq 0 ]]; then
-        echo -e "DEBUG: No libraries found under ${INSTALL_PATH}/${LIB_NAME}/lib\n" 1>>${BASEDIR}/build.log 2>&1
-        echo 1
-        return
-    fi
-
-    echo -e "INFO: ${LIB_NAME} library is already built and installed\n" 1>>${BASEDIR}/build.log 2>&1
-
-    echo 0
+    $(get_clang_target_host)-clang ${CFLAGS} -Wno-unused-command-line-argument -c ${BASEDIR}/android/app/src/main/cpp/android_lts_support.c -o ${BASEDIR}/android/app/src/main/cpp/android_lts_support.o ${LDFLAGS} 1>>${BASEDIR}/build.log 2>&1
+    ${BUILD_HOST}-ar rcs ${BASEDIR}/android/app/src/main/cpp/libandroidltssupport.a ${BASEDIR}/android/app/src/main/cpp/android_lts_support.o 1>>${BASEDIR}/build.log 2>&1
 }

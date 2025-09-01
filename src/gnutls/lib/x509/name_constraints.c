@@ -17,7 +17,7 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>
  *
  */
 
@@ -116,7 +116,7 @@ int _gnutls_extract_name_constraints(ASN1_TYPE c2, const char *vstr,
 {
 	int ret;
 	char tmpstr[128];
-	unsigned indx = 0;
+	unsigned indx;
 	gnutls_datum_t tmp = { NULL, 0 };
 	unsigned int type;
 	struct name_constraints_node_st *nc, *prev;
@@ -127,8 +127,7 @@ int _gnutls_extract_name_constraints(ASN1_TYPE c2, const char *vstr,
 			prev = prev->next;
 	}
 
-	do {
-		indx++;
+	for (indx=1;;indx++) {
 		snprintf(tmpstr, sizeof(tmpstr), "%s.?%u.base", vstr, indx);
 
 		ret =
@@ -164,7 +163,7 @@ int _gnutls_extract_name_constraints(ASN1_TYPE c2, const char *vstr,
 		}
 
 		tmp.data = NULL;
-	} while (ret >= 0);
+	}
 
 	if (ret < 0 && ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
 		gnutls_assert();
@@ -242,7 +241,7 @@ static name_constraints_node_st* name_constraints_node_new(unsigned type,
  * @_nc_excluded: Corresponding excluded name constraints list
  *
  * This function finds the intersection of @_nc and @_nc2. The result is placed in @_nc,
- * the original @_nc is deallocated. @_nc2 is not chenged. If necessary, a universal
+ * the original @_nc is deallocated. @_nc2 is not changed. If necessary, a universal
  * excluded name constraint node of the right type is added to the list provided
  * in @_nc_excluded.
  *
@@ -774,10 +773,11 @@ name_constraints_intersect_nodes(name_constraints_node_st * nc1,
 {
 	// presume empty intersection
 	name_constraints_node_st *intersection = NULL;
-	*_intersection = NULL;
 	name_constraints_node_st *to_copy = NULL;
 	unsigned iplength = 0;
 	unsigned byte;
+
+	*_intersection = NULL;
 
 	if (nc1->type != nc2->type) {
 		return GNUTLS_E_SUCCESS;
@@ -812,12 +812,16 @@ name_constraints_intersect_nodes(name_constraints_node_st * nc1,
 		// for other types, we don't know how to do the intersection, assume empty
 		return GNUTLS_E_SUCCESS;
 	}
+
 	// copy existing node if applicable
 	if (to_copy != NULL) {
 		*_intersection = name_constraints_node_new(to_copy->type, to_copy->name.data, to_copy->name.size);
 		if (*_intersection == NULL)
 			return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
 		intersection = *_intersection;
+
+		assert(intersection->name.data != NULL);
+
 		if (intersection->type == GNUTLS_SAN_IPADDRESS) {
 			// make sure both IP addresses are correctly masked
 			_gnutls_mask_ip(intersection->name.data, intersection->name.data+iplength, iplength);
@@ -828,9 +832,13 @@ name_constraints_intersect_nodes(name_constraints_node_st * nc1,
 			}
 		}
 	}
+
 	return GNUTLS_E_SUCCESS;
 }
 
+/*
+ * Returns: true if the certification is acceptable, and false otherwise.
+ */
 static
 unsigned check_unsupported_constraint(gnutls_x509_name_constraints_t nc,
 									  gnutls_x509_subject_alt_name_t type)
@@ -1048,10 +1056,13 @@ unsigned gnutls_x509_name_constraints_check(gnutls_x509_name_constraints_t nc,
 /* This function checks for unsupported constraints, that we also
  * know their structure. That is it will fail only if the constraint
  * is present in the CA, _and_ the name in the end certificate contains
- * the constrained element. */
-static int check_unsupported_constraint2(gnutls_x509_crt_t cert, 
-					 gnutls_x509_name_constraints_t nc,
-					 gnutls_x509_subject_alt_name_t type)
+ * the constrained element.
+ *
+ * Returns: true if the certification is acceptable, and false otherwise
+ */
+static unsigned check_unsupported_constraint2(gnutls_x509_crt_t cert, 
+					      gnutls_x509_name_constraints_t nc,
+					      gnutls_x509_subject_alt_name_t type)
 {
 	unsigned idx, found_one;
 	char name[MAX_CN];
@@ -1059,13 +1070,12 @@ static int check_unsupported_constraint2(gnutls_x509_crt_t cert,
 	unsigned san_type;
 	int ret;
 
-	idx = 0;
 	found_one = 0;
 
-	do {
+	for (idx=0;;idx++) {
 		name_size = sizeof(name);
 		ret = gnutls_x509_crt_get_subject_alt_name2(cert,
-			idx++, name, &name_size, &san_type, NULL);
+			idx, name, &name_size, &san_type, NULL);
 		if (ret == GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE)
 			break;
 		else if (ret < 0)
@@ -1076,7 +1086,7 @@ static int check_unsupported_constraint2(gnutls_x509_crt_t cert,
 
 		found_one = 1;
 		break;
-	} while(ret >= 0);
+	}
 
 	if (found_one != 0)
 		return check_unsupported_constraint(nc, type);
@@ -1117,11 +1127,11 @@ unsigned found_one;
 		return 1; /* shortcut; no constraints to check */
 
 	if (type == GNUTLS_SAN_RFC822NAME) {
-		idx = found_one = 0;
-		do {
+		found_one = 0;
+		for (idx=0;;idx++) {
 			name_size = sizeof(name);
 			ret = gnutls_x509_crt_get_subject_alt_name2(cert,
-				idx++, name, &name_size, &san_type, NULL);
+				idx, name, &name_size, &san_type, NULL);
 			if (ret == GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE)
 				break;
 			else if (ret < 0)
@@ -1137,7 +1147,7 @@ unsigned found_one;
 				&n);
 			if (t == 0)
 				return gnutls_assert_val(t);
-		} while(ret >= 0);
+		}
 
 		/* there is at least a single e-mail. That means that the EMAIL field will
 		 * not be used for verifying the identity of the holder. */
@@ -1178,11 +1188,11 @@ unsigned found_one;
 			return gnutls_assert_val(1);
 		}
 	} else if (type == GNUTLS_SAN_DNSNAME) {
-		idx = found_one = 0;
-		do {
+		found_one = 0;
+		for (idx=0;;idx++) {
 			name_size = sizeof(name);
 			ret = gnutls_x509_crt_get_subject_alt_name2(cert,
-				idx++, name, &name_size, &san_type, NULL);
+				idx, name, &name_size, &san_type, NULL);
 			if (ret == GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE)
 				break;
 			else if (ret < 0)
@@ -1198,7 +1208,7 @@ unsigned found_one;
 				&n);
 			if (t == 0)
 				return gnutls_assert_val(t);
-		} while(ret >= 0);
+		}
 
 		/* there is at least a single DNS name. That means that the CN will
 		 * not be used for verifying the identity of the holder. */
@@ -1244,11 +1254,11 @@ unsigned found_one;
 			return gnutls_assert_val(1);
 		}
 	} else if (type == GNUTLS_SAN_IPADDRESS) {
-			idx = found_one = 0;
-			do {
+			found_one = 0;
+			for (idx=0;;idx++) {
 				name_size = sizeof(name);
 				ret = gnutls_x509_crt_get_subject_alt_name2(cert,
-					idx++, name, &name_size, &san_type, NULL);
+					idx, name, &name_size, &san_type, NULL);
 				if (ret == GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE)
 					break;
 				else if (ret < 0)
@@ -1263,7 +1273,7 @@ unsigned found_one;
 				t = gnutls_x509_name_constraints_check(nc, GNUTLS_SAN_IPADDRESS, &n);
 				if (t == 0)
 					return gnutls_assert_val(t);
-			} while(ret >= 0);
+			}
 
 			/* there is at least a single IP address. */
 

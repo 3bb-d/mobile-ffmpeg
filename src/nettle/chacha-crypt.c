@@ -47,6 +47,7 @@
 #include <string.h>
 
 #include "chacha.h"
+#include "chacha-internal.h"
 
 #include "macros.h"
 #include "memxor.h"
@@ -72,6 +73,38 @@ chacha_crypt(struct chacha_ctx *ctx,
 
       /* stopping at 2^70 length per nonce is user's responsibility */
       
+      if (length <= CHACHA_BLOCK_SIZE)
+	{
+	  memxor3 (c, m, x, length);
+	  return;
+	}
+      memxor3 (c, m, x, CHACHA_BLOCK_SIZE);
+
+      length -= CHACHA_BLOCK_SIZE;
+      c += CHACHA_BLOCK_SIZE;
+      m += CHACHA_BLOCK_SIZE;
+  }
+}
+
+void
+chacha_crypt32(struct chacha_ctx *ctx,
+	       size_t length,
+	       uint8_t *c,
+	       const uint8_t *m)
+{
+  if (!length)
+    return;
+
+  for (;;)
+    {
+      uint32_t x[_CHACHA_STATE_LENGTH];
+
+      _chacha_core (x, ctx->state, CHACHA_ROUNDS);
+
+      ++ctx->state[12];
+
+      /* stopping at 2^38 length per nonce is user's responsibility */
+
       if (length <= CHACHA_BLOCK_SIZE)
 	{
 	  memxor3 (c, m, x, length);

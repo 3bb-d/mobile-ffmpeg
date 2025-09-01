@@ -82,7 +82,7 @@ void
 test_main (void)
 {
   /* From RFC 4754 */
-  test_ecdsa (&nettle_secp_256r1,
+  test_ecdsa (&_nettle_secp_256r1,
 	      "2442A5CC 0ECD015F A3CA31DC 8E2BBC70"
 	      "BF42D60C BCA20085 E0822CB0 4235E970",  /* x */
 
@@ -97,7 +97,7 @@ test_main (void)
 	      "86FA3BB4 E26CAD5B F90B7F81 899256CE"
 	      "7594BB1E A0C89212 748BFF3B 3D5B0315"); /* s */
 
-  test_ecdsa (&nettle_secp_384r1,
+  test_ecdsa (&_nettle_secp_384r1,
 	      "96281BF8 DD5E0525 CA049C04 8D345D30"
 	      "82968D10 FEDF5C5A CA0C64E6 465A97EA"
 	      "5CE10C9D FEC21797 41571072 1F437922",  /* x */
@@ -117,7 +117,7 @@ test_main (void)
 	      "09F417BC A112674C 528262A4 0A629AF1"
 	      "CBB9F516 CE0FA7D2 FF630863 A00E8B9F"); /* s*/
 
-  test_ecdsa (&nettle_secp_521r1,
+  test_ecdsa (&_nettle_secp_521r1,
 	      "0151518F 1AF0F563 517EDD54 85190DF9"
 	      "5A4BF57B 5CBA4CF2 A9A3F647 4725A35F"
 	      "7AFE0A6D DEB8BEDB CD6A197E 592D4018"
@@ -145,17 +145,4 @@ test_main (void)
 	      "97536710 1F67D1CF 9BCCBF2F 3D239534" 
 	      "FA509E70 AAC851AE 01AAC68D 62F86647"
 	      "2660"); /* s */
-
-  test_ecdsa (&_nettle_curve25519,
-	      /* Public key corresponding to the key in ecdsa-sign-test */
-	      "59f8f317fd5f4e82 c02f8d4dec665fe1"
-	      "230f83b8572638e1 b2ac34a30028e24d", /* x */
-	      "1902a72dc1a6525a 811b9c1845978d56"
-	      "fd97dce5e278ebdd ec695349d7e41498", /* y */
-	      SHEX("e99df2a098c3c590 ea1e1db6d9547339"
-		   "ae760d5331496119 5d967fd881e3b0f5"), /* h */
-	      " 515c3a485f57432 0daf3353a0d08110"
-	      "64157c556296de09 4132f74865961b37", /* r */
-	      "  78f23367291b01 3fc430fb09322d95"
-	      "4384723649868d8e 88effc7ac8b141d7"); /* s */
 }

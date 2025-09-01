@@ -18,6 +18,7 @@
  */
 
 #include "cpu-features.h"
+#include "fftools_ffmpeg.h"
 #include "mobileffmpeg_abidetect.h"
 
 /** Full name of the Java class that owns native functions in this file. */
@@ -25,15 +26,18 @@ const char *abiDetectClassName = "com/arthenica/mobileffmpeg/AbiDetect";
 
 /** Prototypes of native functions defined by this file. */
 JNINativeMethod abiDetectMethods[] = {
-  {"getAbi", "()Ljava/lang/String;", (void*) Java_com_arthenica_mobileffmpeg_AbiDetect_getAbi}
+  {"getNativeAbi", "()Ljava/lang/String;", (void*) Java_com_arthenica_mobileffmpeg_AbiDetect_getNativeAbi},
+  {"getNativeCpuAbi", "()Ljava/lang/String;", (void*) Java_com_arthenica_mobileffmpeg_AbiDetect_getNativeCpuAbi},
+  {"isNativeLTSBuild", "()Z", (void*) Java_com_arthenica_mobileffmpeg_AbiDetect_isNativeLTSBuild},
+  {"getNativeBuildConf", "()Ljava/lang/String;", (void*) Java_com_arthenica_mobileffmpeg_AbiDetect_getNativeBuildConf}
 };
 
 /**
  * Called when 'abidetect' native library is loaded.
  *
- * \param vm pointer to the running virtual machine
- * \param reserved reserved
- * \return JNI version needed by 'abidetect' library
+ * @param vm pointer to the running virtual machine
+ * @param reserved reserved
+ * @return JNI version needed by 'abidetect' library
  */
 jint JNI_OnLoad(JavaVM *vm, void *reserved) {
     JNIEnv *env;
@@ -48,7 +52,7 @@ jint JNI_OnLoad(JavaVM *vm, void *reserved) {
         return JNI_FALSE;
     }
 
-    if ((*env)->RegisterNatives(env, abiDetectClass, abiDetectMethods, 1) < 0) {
+    if ((*env)->RegisterNatives(env, abiDetectClass, abiDetectMethods, 4) < 0) {
         LOGE("OnLoad failed to RegisterNatives for class %s.\n", abiDetectClassName);
         return JNI_FALSE;
     }
@@ -57,13 +61,36 @@ jint JNI_OnLoad(JavaVM *vm, void *reserved) {
 }
 
 /**
- * Returns running ABI name.
+ * Returns loaded ABI name.
  *
- * \param env pointer to native method interface
- * \param object reference to the class on which this method is invoked
- * \return running ABI name as UTF string
+ * @param env pointer to native method interface
+ * @param object reference to the class on which this method is invoked
+ * @return loaded ABI name as UTF string
  */
-JNIEXPORT jstring JNICALL Java_com_arthenica_mobileffmpeg_AbiDetect_getAbi(JNIEnv *env, jclass object) {
+JNIEXPORT jstring JNICALL Java_com_arthenica_mobileffmpeg_AbiDetect_getNativeAbi(JNIEnv *env, jclass object) {
+
+#ifdef MOBILE_FFMPEG_ARM_V7A
+    return (*env)->NewStringUTF(env, "arm-v7a");
+#elif MOBILE_FFMPEG_ARM64_V8A
+    return (*env)->NewStringUTF(env, "arm64-v8a");
+#elif MOBILE_FFMPEG_X86
+    return (*env)->NewStringUTF(env, "x86");
+#elif MOBILE_FFMPEG_X86_64
+    return (*env)->NewStringUTF(env, "x86_64");
+#else
+    return (*env)->NewStringUTF(env, "unknown");
+#endif
+
+}
+
+/**
+ * Returns ABI name of the running cpu.
+ *
+ * @param env pointer to native method interface
+ * @param object reference to the class on which this method is invoked
+ * @return ABI name of the running cpu as UTF string
+ */
+JNIEXPORT jstring JNICALL Java_com_arthenica_mobileffmpeg_AbiDetect_getNativeCpuAbi(JNIEnv *env, jclass object) {
     AndroidCpuFamily family = android_getCpuFamily();
 
     if (family == ANDROID_CPU_FAMILY_ARM) {
@@ -88,4 +115,30 @@ JNIEXPORT jstring JNICALL Java_com_arthenica_mobileffmpeg_AbiDetect_getAbi(JNIEn
     } else {
         return (*env)->NewStringUTF(env, ABI_UNKNOWN);
     }
+}
+
+/**
+ * Returns whether MobileFFmpeg release is a long term release or not.
+ *
+ * @param env pointer to native method interface
+ * @param object reference to the class on which this method is invoked
+ * @return yes or no
+ */
+JNIEXPORT jboolean JNICALL Java_com_arthenica_mobileffmpeg_AbiDetect_isNativeLTSBuild(JNIEnv *env, jclass object) {
+    #if defined(MOBILE_FFMPEG_LTS)
+        return JNI_TRUE;
+    #else
+        return JNI_FALSE;
+    #endif
+}
+
+/**
+ * Returns build configuration for FFmpeg.
+ *
+ * @param env pointer to native method interface
+ * @param object reference to the class on which this method is invoked
+ * @return build configuration string
+ */
+JNIEXPORT jstring JNICALL Java_com_arthenica_mobileffmpeg_AbiDetect_getNativeBuildConf(JNIEnv *env, jclass object) {
+    return (*env)->NewStringUTF(env, FFMPEG_CONFIGURATION);
 }

@@ -23,12 +23,12 @@ fi
 # ENABLE COMMON FUNCTIONS
 . ${BASEDIR}/build/android-common.sh
 
-# PREPARING PATHS & DEFINING ${INSTALL_PKG_CONFIG_DIR}
+# PREPARE PATHS & DEFINE ${INSTALL_PKG_CONFIG_DIR}
 LIB_NAME="libtheora"
 set_toolchain_clang_paths ${LIB_NAME}
 
 # PREPARING FLAGS
-TARGET_HOST=$(get_target_host)
+BUILD_HOST=$(get_build_host)
 export CFLAGS=$(get_cflags ${LIB_NAME})
 export CXXFLAGS=$(get_cxxflags ${LIB_NAME})
 export LDFLAGS=$(get_ldflags ${LIB_NAME})
@@ -38,9 +38,15 @@ cd ${BASEDIR}/src/${LIB_NAME} || exit 1
 
 make distclean 2>/dev/null 1>/dev/null
 
-# RECONFIGURING IF REQUESTED
+# RECONFIGURE IF REQUESTED
 if [[ ${RECONF_libtheora} -eq 1 ]]; then
     autoreconf_library ${LIB_NAME}
+fi
+
+if [[ -z ${MOBILE_FFMPEG_LTS_BUILD} ]]; then
+    ASM_FLAGS="--enable-asm"
+else
+    ASM_FLAGS="--disable-asm"
 fi
 
 ./configure \
@@ -52,14 +58,15 @@ fi
     --disable-examples \
     --disable-telemetry \
     --disable-sdltest \
+    ${ASM_FLAGS} \
     --disable-valgrind-testing \
-    --host=${TARGET_HOST} || exit 1
+    --host=${BUILD_HOST} || exit 1
 
-make ${MOBILE_FFMPEG_DEBUG} -j$(get_cpu_count) || exit 1
+make -j$(get_cpu_count) || exit 1
 
 # MANUALLY COPY PKG-CONFIG FILES
-cp theoradec.pc ${INSTALL_PKG_CONFIG_DIR}
-cp theoraenc.pc ${INSTALL_PKG_CONFIG_DIR}
-cp theora.pc ${INSTALL_PKG_CONFIG_DIR}
+cp theoradec.pc ${INSTALL_PKG_CONFIG_DIR} || exit 1
+cp theoraenc.pc ${INSTALL_PKG_CONFIG_DIR} || exit 1
+cp theora.pc ${INSTALL_PKG_CONFIG_DIR} || exit 1
 
 make install || exit 1

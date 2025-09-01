@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Taner Sener
+ * Copyright (c) 2018-2020 Taner Sener
  *
  * This file is part of MobileFFmpeg.
  *
@@ -20,8 +20,7 @@
 package com.arthenica.mobileffmpeg;
 
 /**
- * <p>This class is used to detect running ABI name using Android's <code>cpufeatures</code>
- * library.
+ * <p>This class is used to detect running ABI name using Google <code>cpu-features</code> library.
  *
  * @author Taner Sener
  * @since v1.0
@@ -29,12 +28,20 @@ package com.arthenica.mobileffmpeg;
 public class AbiDetect {
 
     static {
-        System.loadLibrary("mobileffmpeg-abidetect");
+        armV7aNeonLoaded = false;
+
+        System.loadLibrary("mobileffmpeg_abidetect");
 
         /* ALL LIBRARIES LOADED AT STARTUP */
         Config.class.getName();
         FFmpeg.class.getName();
     }
+
+    static final String ARM_V7A = "arm-v7a";
+
+    static final String ARM_V7A_NEON = "arm-v7a-neon";
+
+    private static boolean armV7aNeonLoaded;
 
     /**
      * Default constructor hidden.
@@ -42,11 +49,49 @@ public class AbiDetect {
     private AbiDetect() {
     }
 
+    static void setArmV7aNeonLoaded(final boolean armV7aNeonLoaded) {
+        AbiDetect.armV7aNeonLoaded = armV7aNeonLoaded;
+    }
+
     /**
-     * <p>Returns running ABI name.
+     * <p>Returns loaded ABI name.
      *
-     * @return running ABI name
+     * @return loaded ABI name
      */
-    public native static String getAbi();
+    public static String getAbi() {
+        if (armV7aNeonLoaded) {
+            return ARM_V7A_NEON;
+        } else {
+            return getNativeAbi();
+        }
+    }
+
+    /**
+     * <p>Returns loaded ABI name.
+     *
+     * @return loaded ABI name
+     */
+    public native static String getNativeAbi();
+
+    /**
+     * <p>Returns ABI name of the running cpu.
+     *
+     * @return ABI name of the running cpu
+     */
+    public native static String getNativeCpuAbi();
+
+    /**
+     * <p>Returns whether MobileFFmpeg release is a long term release or not.
+     *
+     * @return yes or no
+     */
+    native static boolean isNativeLTSBuild();
+
+    /**
+     * <p>Returns build configuration for <code>FFmpeg</code>.
+     *
+     * @return build configuration string
+     */
+    native static String getNativeBuildConf();
 
 }

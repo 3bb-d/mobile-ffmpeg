@@ -39,4 +39,10 @@ public interface Tooltip {
     // VID.STAB TEST
     String VIDSTAB_TEST_TOOLTIP_TEXT = "Click the button to stabilize video. Original video will play above and stabilized video will play below";
 
+    // PIPE TEST
+    String PIPE_TEST_TOOLTIP_TEXT = "Click the button to create a video using pipe redirection. Created video will play inside the frame below";
+
+    // CONCURRENT EXECUTION TEST
+    String CONCURRENT_EXECUTION_TEST_TOOLTIP_TEXT = " Use ENCODE nad CANCEL buttons to start/stop multiple execution";
+
 }

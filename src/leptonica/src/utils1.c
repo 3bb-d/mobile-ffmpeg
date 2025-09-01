@@ -28,6 +28,17 @@
  * \file utils1.c
  * <pre>
  *
+ *       ------------------------------------------
+ *       This file has these utilities:
+ *         - error, warning and info messages
+ *         - low-level endian conversions
+ *         - file corruption operations
+ *         - random and prime number operations
+ *         - 64-bit hash functions
+ *         - leptonica version number accessor
+ *         - timing and date operations
+ *       ------------------------------------------
+ *
  *       Control of error, warning and info messages
  *           l_int32    setMsgSeverity()
  *
@@ -167,9 +178,9 @@ char    *envsev;
 /*!
  * \brief   returnErrorInt()
  *
- * \param[in]    msg error message
+ * \param[in]    msg        error message
  * \param[in]    procname
- * \param[in]    ival return val
+ * \param[in]    ival       return error val
  * \return  ival typically 1 for an error return
  */
 l_int32
@@ -185,9 +196,9 @@ returnErrorInt(const char  *msg,
 /*!
  * \brief   returnErrorFloat()
  *
- * \param[in]    msg error message
+ * \param[in]    msg        error message
  * \param[in]    procname
- * \param[in]    fval return val
+ * \param[in]    fval       return error val
  * \return  fval
  */
 l_float32
@@ -203,10 +214,10 @@ returnErrorFloat(const char  *msg,
 /*!
  * \brief   returnErrorPtr()
  *
- * \param[in]    msg error message
+ * \param[in]    msg        error message
  * \param[in]    procname
- * \param[in]    pval  return val
- * \return  pval typically null
+ * \param[in]    pval       return error val
+ * \return  pval  typically null for an error return
  */
 void *
 returnErrorPtr(const char  *msg,
@@ -226,10 +237,10 @@ returnErrorPtr(const char  *msg,
  *
  * \param[in]    fname1
  * \param[in]    fname2
- * \param[out]   psame 1 if identical; 0 if different
+ * \param[out]   psame     1 if identical; 0 if different
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 filesAreIdentical(const char  *fname1,
                   const char  *fname2,
                   l_int32     *psame)
@@ -357,9 +368,9 @@ convertOnBigEnd32(l_uint32  wordin)
  * \brief   fileCorruptByDeletion()
  *
  * \param[in]    filein
- * \param[in]    loc fractional location of start of deletion
- * \param[in]    size fractional size of deletion
- * \param[in]    fileout corrupted file
+ * \param[in]    loc       fractional location of start of deletion
+ * \param[in]    size      fractional size of deletion
+ * \param[in]    fileout   corrupted file
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -373,7 +384,7 @@ convertOnBigEnd32(l_uint32  wordin)
  *          data is corrupted, by simulating data corruption by deletion.
  * </pre>
  */
-l_int32
+l_ok
 fileCorruptByDeletion(const char  *filein,
                       l_float32    loc,
                       l_float32    size,
@@ -421,9 +432,9 @@ l_uint8  *datain, *dataout;
  * \brief   fileCorruptByMutation()
  *
  * \param[in]    filein
- * \param[in]    loc fractional location of start of randomization
- * \param[in]    size fractional size of randomization
- * \param[in]    fileout corrupted file
+ * \param[in]    loc       fractional location of start of randomization
+ * \param[in]    size      fractional size of randomization
+ * \param[in]    fileout   corrupted file
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -437,7 +448,7 @@ l_uint8  *datain, *dataout;
  *          data is corrupted, by simulating data corruption.
  * </pre>
  */
-l_int32
+l_ok
 fileCorruptByMutation(const char  *filein,
                       l_float32    loc,
                       l_float32    size,
@@ -484,9 +495,9 @@ l_uint8  *data;
 /*!
  * \brief   genRandomIntegerInRange()
  *
- * \param[in]    range size of range; must be >= 2
- * \param[in]    seed use 0 to skip; otherwise call srand
- * \param[out]   pval random integer in range {0 ... range-1}
+ * \param[in]    range     size of range; must be >= 2
+ * \param[in]    seed      use 0 to skip; otherwise call srand
+ * \param[out]   pval      random integer in range {0 ... range-1}
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -495,7 +506,7 @@ l_uint8  *data;
  *          use %range = 100.
  * </pre>
  */
-l_int32
+l_ok
 genRandomIntegerInRange(l_int32   range,
                         l_int32   seed,
                         l_int32  *pval)
@@ -546,7 +557,7 @@ lept_roundftoi(l_float32  fval)
  * \brief   l_hashStringToUint64()
  *
  * \param[in]    str
- * \param[out]   phash hash vale
+ * \param[out]   phash    hash value
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -564,7 +575,7 @@ lept_roundftoi(l_float32  fval)
  *          collisions for this set.
  * </pre>
  */
-l_int32
+l_ok
 l_hashStringToUint64(const char  *str,
                      l_uint64    *phash)
 {
@@ -592,12 +603,12 @@ l_uint64  hash, mulp;
  * \brief   l_hashPtToUint64()
  *
  * \param[in]    x, y
- * \param[out]   phash hash value
+ * \param[out]   phash    hash value
  * \return  0 if OK, 1 on error
  *
  * <pre>
  * Notes:
- *      (1) I found that a simple hash function has no collisions for
+ *      (1) This simple hash function has no collisions for
  *          any of 400 million points with x and y up to 20000.
  *      (2) Previously used a much more complicated and slower function:
  *            mulp = 26544357894361;
@@ -610,7 +621,7 @@ l_uint64  hash, mulp;
  *          values are not required.
  * </pre>
  */
-l_int32
+l_ok
 l_hashPtToUint64(l_int32    x,
                  l_int32    y,
                  l_uint64  *phash)
@@ -630,7 +641,7 @@ l_hashPtToUint64(l_int32    x,
  *
  * \param[in]    nbuckets
  * \param[in]    val
- * \param[out]   phash hash value
+ * \param[out]   phash      hash value
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -650,7 +661,7 @@ l_hashPtToUint64(l_int32    x,
  *          and a dnahash hashmap are built.  See l_dnaMakeHistoByHash().
  * </pre>
  */
-l_int32
+l_ok
 l_hashFloat64ToUint64(l_int32    nbuckets,
                       l_float64  val,
                       l_uint64  *phash)
@@ -671,10 +682,10 @@ l_hashFloat64ToUint64(l_int32    nbuckets,
  * \brief   findNextLargerPrime()
  *
  * \param[in]    start
- * \param[out]   pprime first prime larger than %start
+ * \param[out]   pprime    first prime larger than %start
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 findNextLargerPrime(l_int32    start,
                     l_uint32  *pprime)
 {
@@ -703,13 +714,13 @@ l_int32  i, is_prime;
 /*!
  * \brief   lept_isPrime()
  *
- * \param[in]    n 64-bit unsigned
- * \param[out]   pis_prime 1 if prime, 0 otherwise
- * \param[out]   pfactor [optional] smallest divisor,
- *                       or 0 on error or if prime
+ * \param[in]    n           64-bit unsigned
+ * \param[out]   pis_prime   1 if prime, 0 otherwise
+ * \param[out]   pfactor     [optional] smallest divisor, or 0 on error
+ *                           or if prime
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 lept_isPrime(l_uint64   n,
              l_int32   *pis_prime,
              l_uint32  *pfactor)
@@ -916,8 +927,8 @@ struct rusage  rusage_stop;
 /*!
  * \brief   l_getCurrentTime()
  *
- * \param[out]   sec [optional] in seconds since birth of Unix
- * \param[out]   usec [optional] in microseconds since birth of Unix
+ * \param[out]   sec     [optional] in seconds since birth of Unix
+ * \param[out]   usec    [optional] in microseconds since birth of Unix
  * \return  void
  */
 void
@@ -1062,7 +1073,7 @@ L_WALLTIMER  *timer;
 /*!
  * \brief   stopWallTimer()
  *
- * \param[in,out]  ptimer walltimer-ptr
+ * \param[in,out]  ptimer     walltimer pointer
  * \return  time wall time elapsed in seconds
  */
 l_float32
@@ -1103,10 +1114,11 @@ L_WALLTIMER  *timer;
 char *
 l_getFormattedDate()
 {
-char        buf[sizeof "199812231952SS-08'00'"] = "", sep = 'Z';
+char        buf[128] = "", sep = 'Z';
 l_int32     gmt_offset, relh, relm;
 time_t      ut, lt;
-struct tm  *tptr;
+struct tm   Tm;
+struct tm  *tptr = &Tm;
 
     ut = time(NULL);
 
@@ -1119,7 +1131,15 @@ struct tm  *tptr;
            itself whether DST is in effect.  This is necessary because
            "gmtime" always sets "tm_isdst" to 0, which would tell
            "mktime" to presume that DST is not in effect. */
+#ifdef _WIN32
+  #ifdef _MSC_VER
+    gmtime_s(tptr, &ut);
+  #else  /* mingw */
     tptr = gmtime(&ut);
+  #endif
+#else
+    gmtime_r(&ut, tptr);
+#endif
     tptr->tm_isdst = -1;
     lt = mktime(tptr);
 

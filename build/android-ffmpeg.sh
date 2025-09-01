@@ -29,12 +29,12 @@ fi
 # ENABLE COMMON FUNCTIONS
 . ${BASEDIR}/build/android-common.sh
 
-# PREPARING PATHS & DEFINING ${INSTALL_PKG_CONFIG_DIR}
+# PREPARE PATHS & DEFINE ${INSTALL_PKG_CONFIG_DIR}
 LIB_NAME="ffmpeg"
 set_toolchain_clang_paths ${LIB_NAME}
 
 # PREPARING FLAGS
-TARGET_HOST=$(get_target_host)
+BUILD_HOST=$(get_build_host)
 CFLAGS=$(get_cflags ${LIB_NAME})
 CXXFLAGS=$(get_cxxflags ${LIB_NAME})
 LDFLAGS=$(get_ldflags ${LIB_NAME})
@@ -42,41 +42,41 @@ export PKG_CONFIG_LIBDIR="${INSTALL_PKG_CONFIG_DIR}"
 
 TARGET_CPU=""
 TARGET_ARCH=""
-ASM_FLAGS=""
+ARCH_OPTIONS=""
 case ${ARCH} in
     arm-v7a)
         TARGET_CPU="armv7-a"
         TARGET_ARCH="armv7-a"
-        ASM_FLAGS="	--disable-neon --enable-asm --enable-inline-asm"
+        ARCH_OPTIONS="	--disable-neon --enable-asm --enable-inline-asm"
     ;;
     arm-v7a-neon)
         TARGET_CPU="armv7-a"
         TARGET_ARCH="armv7-a"
-        ASM_FLAGS="	--enable-neon --enable-asm --enable-inline-asm"
+        ARCH_OPTIONS="	--enable-neon --enable-asm --enable-inline-asm --build-suffix=_neon"
     ;;
     arm64-v8a)
         TARGET_CPU="armv8-a"
         TARGET_ARCH="aarch64"
-        ASM_FLAGS="	--enable-neon --enable-asm --enable-inline-asm"
+        ARCH_OPTIONS="	--enable-neon --enable-asm --enable-inline-asm"
     ;;
     x86)
         TARGET_CPU="i686"
         TARGET_ARCH="i686"
 
         # asm disabled due to this ticker https://trac.ffmpeg.org/ticket/4928
-        ASM_FLAGS="	--disable-neon --disable-asm --disable-inline-asm"
+        ARCH_OPTIONS="	--disable-neon --disable-asm --disable-inline-asm"
     ;;
     x86-64)
         TARGET_CPU="x86_64"
         TARGET_ARCH="x86_64"
-        ASM_FLAGS="	--disable-neon --enable-asm --enable-inline-asm"
+        ARCH_OPTIONS="	--disable-neon --enable-asm --enable-inline-asm"
     ;;
 esac
 
 CONFIGURE_POSTFIX=""
 HIGH_PRIORITY_INCLUDES=""
 
-for library in {1..43}
+for library in {1..49}
 do
     if [[ ${!library} -eq 1 ]]; then
         ENABLED_LIBRARY=$(get_library_name $((library - 1)))
@@ -163,7 +163,7 @@ do
             libvpx)
                 CFLAGS+=" $(pkg-config --cflags vpx)"
                 LDFLAGS+=" $(pkg-config --libs vpx)"
-                LDFLAGS+=" $(pkg-config --libs --static cpufeatures)"
+                LDFLAGS+=" $(pkg-config --libs cpu-features)"
                 CONFIGURE_POSTFIX+=" --enable-libvpx"
             ;;
             libwebp)
@@ -178,16 +178,23 @@ do
             ;;
             opencore-amr)
                 CFLAGS+=" $(pkg-config --cflags opencore-amrnb)"
-                CFLAGS+=" $(pkg-config --cflags opencore-amrwb)"
                 LDFLAGS+=" $(pkg-config --libs --static opencore-amrnb)"
-                LDFLAGS+=" $(pkg-config --libs --static opencore-amrwb)"
                 CONFIGURE_POSTFIX+=" --enable-libopencore-amrnb"
-                CONFIGURE_POSTFIX+=" --enable-libopencore-amrwb"
+            ;;
+            openh264)
+                FFMPEG_CFLAGS+=" $(pkg-config --cflags openh264)"
+                FFMPEG_LDFLAGS+=" $(pkg-config --libs --static openh264)"
+                CONFIGURE_POSTFIX+=" --enable-libopenh264"
             ;;
             opus)
                 CFLAGS+=" $(pkg-config --cflags opus)"
                 LDFLAGS+=" $(pkg-config --libs --static opus)"
                 CONFIGURE_POSTFIX+=" --enable-libopus"
+            ;;
+            rubberband)
+                CFLAGS+=" $(pkg-config --cflags rubberband)"
+                LDFLAGS+=" $(pkg-config --libs --static rubberband)"
+                CONFIGURE_POSTFIX+=" --enable-librubberband --enable-gpl"
             ;;
             shine)
                 CFLAGS+=" $(pkg-config --cflags shine)"
@@ -225,6 +232,11 @@ do
                 CFLAGS+=" $(pkg-config --cflags twolame)"
                 LDFLAGS+=" $(pkg-config --libs --static twolame)"
                 CONFIGURE_POSTFIX+=" --enable-libtwolame"
+            ;;
+            vo-amrwbenc)
+                CFLAGS+=" $(pkg-config --cflags vo-amrwbenc)"
+                LDFLAGS+=" $(pkg-config --libs --static vo-amrwbenc)"
+                CONFIGURE_POSTFIX+=" --enable-libvo-amrwbenc"
             ;;
             wavpack)
                 CFLAGS+=" $(pkg-config --cflags wavpack)"
@@ -275,20 +287,25 @@ do
             ;;
             android-media-codec)
                 CONFIGURE_POSTFIX+=" --enable-mediacodec"
-            ;;
         esac
     else
 
         # THE FOLLOWING LIBRARIES SHOULD BE EXPLICITLY DISABLED TO PREVENT AUTODETECT
-        if [[ ${library} -eq 30 ]]; then
+        # NOTE THAT IDS MUST BE +1 OF THE INDEX VALUE
+        if [[ ${library} -eq 31 ]]; then
             CONFIGURE_POSTFIX+=" --disable-sdl2"
-        elif [[ ${library} -eq 42 ]]; then
+        elif [[ ${library} -eq 46 ]]; then
             CONFIGURE_POSTFIX+=" --disable-zlib"
         fi
     fi
 done
 
 LDFLAGS+=" -L${ANDROID_NDK_ROOT}/platforms/android-${API}/arch-${TOOLCHAIN_ARCH}/usr/lib"
+
+# LINKING WITH ANDROID LTS SUPPORT LIBRARY IS NECESSARY FOR API < 18
+if [[ ! -z ${MOBILE_FFMPEG_LTS_BUILD} ]] && [[ ${API} < 18 ]]; then
+    LDFLAGS+=" -Wl,--whole-archive ${BASEDIR}/android/app/src/main/cpp/libandroidltssupport.a -Wl,--no-whole-archive"
+fi
 
 # OPTIMIZE FOR SPEED INSTEAD OF SIZE
 if [[ -z ${MOBILE_FFMPEG_OPTIMIZED_FOR_SPEED} ]]; then
@@ -297,42 +314,74 @@ else
     SIZE_OPTIONS="";
 fi
 
-cd ${BASEDIR}/src/${LIB_NAME} || exit 1
+# SET DEBUG OPTIONS
+if [[ -z ${MOBILE_FFMPEG_DEBUG} ]]; then
+
+    # SET LTO FLAGS
+    if [[ -z ${NO_LINK_TIME_OPTIMIZATION} ]]; then
+        DEBUG_OPTIONS="--disable-debug --enable-lto";
+    else
+        DEBUG_OPTIONS="--disable-debug --disable-lto";
+    fi
+else
+    DEBUG_OPTIONS="--enable-debug --disable-stripping";
+fi
 
 echo -n -e "\n${LIB_NAME}: "
 
-make distclean 2>/dev/null 1>/dev/null
+# DOWNLOAD LIBRARY
+DOWNLOAD_RESULT=$(download_library_source ${LIB_NAME})
+if [[ ${DOWNLOAD_RESULT} -ne 0 ]]; then
+    exit 1
+fi
+
+cd ${BASEDIR}/src/${LIB_NAME} || exit 1
+
+if [[ -z ${NO_WORKSPACE_CLEANUP_ffmpeg} ]]; then
+    echo -e "INFO: Cleaning workspace for ${LIB_NAME}" 1>>${BASEDIR}/build.log 2>&1
+    make distclean 2>/dev/null 1>/dev/null
+fi
 
 export CFLAGS="${HIGH_PRIORITY_INCLUDES} ${CFLAGS}"
 export CXXFLAGS="${CXXFLAGS}"
 export LDFLAGS="${LDFLAGS}"
 
+# USE HIGHER LIMITS FOR FFMPEG LINKING
+ulimit -n 2048 1>>${BASEDIR}/build.log 2>&1
+
+########################### CUSTOMIZATIONS #######################
+
+# 1. Use thread local log level
+${SED_INLINE} 's/static int av_log_level/__thread int av_log_level/g' ${BASEDIR}/src/${LIB_NAME}/libavutil/log.c 1>>${BASEDIR}/build.log 2>&1
+
+###################################################################
+
 ./configure \
-    --cross-prefix="${TARGET_HOST}-" \
-    --sysroot="${ANDROID_NDK_ROOT}/toolchains/mobile-ffmpeg-api-${API}-${TOOLCHAIN}/sysroot" \
+    --cross-prefix="${BUILD_HOST}-" \
+    --sysroot="${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/${TOOLCHAIN}/sysroot" \
     --prefix="${BASEDIR}/prebuilt/android-$(get_target_build)/${LIB_NAME}" \
     --pkg-config="${HOST_PKG_CONFIG_PATH}" \
     --enable-version3 \
     --arch="${TARGET_ARCH}" \
     --cpu="${TARGET_CPU}" \
+    --cc="${CC}" \
+    --cxx="${CXX}" \
+    --extra-libs="$(pkg-config --libs --static cpu-features)" \
     --target-os=android \
-    ${ASM_FLAGS} \
+    ${ARCH_OPTIONS} \
     --enable-cross-compile \
     --enable-pic \
     --enable-jni \
-    --enable-lto \
     --enable-optimizations \
     --enable-swscale \
     --enable-shared \
-    --disable-v4l2-m2m \
-    --disable-outdev=v4l2 \
+    --enable-v4l2-m2m \
     --disable-outdev=fbdev \
-    --disable-indev=v4l2 \
     --disable-indev=fbdev \
     ${SIZE_OPTIONS} \
     --disable-openssl \
     --disable-xmm-clobber-test \
-    --disable-debug \
+    ${DEBUG_OPTIONS} \
     --disable-neon-clobber-test \
     --disable-programs \
     --disable-postproc \
@@ -367,13 +416,26 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-make ${MOBILE_FFMPEG_DEBUG} -j$(get_cpu_count) 1>>${BASEDIR}/build.log 2>&1
+if [[ -z ${NO_OUTPUT_REDIRECTION} ]]; then
+    make -j$(get_cpu_count) 1>>${BASEDIR}/build.log 2>&1
 
-if [ $? -ne 0 ]; then
-    echo "failed"
-    exit 1
+    if [ $? -ne 0 ]; then
+        echo "failed"
+        exit 1
+    fi
+else
+    echo -e "started\n"
+    make -j$(get_cpu_count) 1>>${BASEDIR}/build.log 2>&1
+
+    if [ $? -ne 0 ]; then
+        echo -n -e "\n${LIB_NAME}: failed\n"
+        exit 1
+    else
+        echo -n -e "\n${LIB_NAME}: "
+    fi
 fi
 
+rm -rf ${BASEDIR}/prebuilt/android-$(get_target_build)/${LIB_NAME}
 make install 1>>${BASEDIR}/build.log 2>&1
 
 if [ $? -ne 0 ]; then

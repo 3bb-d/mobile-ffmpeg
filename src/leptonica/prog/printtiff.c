@@ -29,35 +29,41 @@
  *
  *   Syntax:  printtiff filein [printer]
  *
- *   Prints a multipage tiff file to a printer.  If the tiff is
- *   at standard fax resolution, it expands the vertical size
- *   by a factor of two before encapsulating in ccittg4 encoded
- *   PostScript.  The PostScript file is left in /tmp, and
- *   erased (deleted, removed, unlinked) on the next invocation.
+ *   Prints a multipage tiff file of 1 bpp images to a printer.
+ *   If the tiff is at standard fax resolution, it expands the
+ *   vertical size by a factor of two before encapsulating in
+ *   ccittg4 encoded PostScript.  The PostScript file is left in /tmp,
+ *   and erased (deleted, removed, unlinked) on the next invocation.
  *
  *   If the printer is not specified, this just writes the PostScript
- *   file into /tmp.
+ *   file /tmp/print_tiff.ps.
+ *
+ *   If your system does not have lpr, it likely has lp.  You can run
+ *   printtiff to make the PostScript file, and then print with lp:
+ *       lp -d <printer> /tmp/print_tiff.ps
+ *       lp -d <printer> -o ColorModel=Color /tmp/print_tiff.ps
+ *   etc.
  *
  *   ***************************************************************
- *   N.B.  This requires lpr, which is invoked via 'system'.  It could
- *         pose a security vulnerability if used as a service in a
- *         production environment.  Consequently, this program should
- *         only be used for debug and testing.
+ *   N.B.  If a printer is specified, this program invokes lpr via
+ *         "system'.  It could pose a security vulnerability if used
+ *         as a service in a production environment.  Consequently,
+ *         this program should only be used for debug and testing.
  *   ***************************************************************
  */
 
 #include "allheaders.h"
 
-#define   TEMP_PS       "junk_printtiff.ps"   /* in the temp directory */
+#define   TEMP_PS       "print_tiff.ps"   /* in the temp directory */
 #define   FILL_FACTOR   0.95
 
 int main(int    argc,
          char **argv)
 {
-char           *filein, *tempfile, *printer;
-char            buf[512];
-l_int32         ignore;
-static char     mainName[] = "printtiff";
+l_int32      ret;
+char        *filein, *tempfile, *printer;
+char         buf[512];
+static char  mainName[] = "printtiff";
 
     if (argc != 2 && argc != 3)
         return ERROR_INT(" Syntax:  printtiff filein [printer]", mainName, 1);
@@ -73,13 +79,13 @@ static char     mainName[] = "printtiff";
          "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n");
 
     setLeptDebugOK(1);
-    lept_rm(NULL, TEMP_PS);
+    (void)lept_rm(NULL, TEMP_PS);
     tempfile = genPathname("/tmp", TEMP_PS);
     convertTiffMultipageToPS(filein, tempfile, FILL_FACTOR);
 
     if (argc == 3) {
         snprintf(buf, sizeof(buf), "lpr -P%s %s &", printer, tempfile);
-        ignore = system(buf);
+        ret = system(buf);
     }
 
     lept_free(tempfile);

@@ -61,6 +61,7 @@
  *           BOXA     *boxaAdjustSides()
  *           BOX      *boxAdjustSides()
  *           BOXA     *boxaSetSide()
+ *           l_int32   boxSetSide()
  *           BOXA     *boxaAdjustWidthToTarget()
  *           BOXA     *boxaAdjustHeightToTarget()
  *           l_int32   boxEqual()
@@ -91,16 +92,16 @@ static l_int32 boxGetDistanceInXorY(l_int32 c1, l_int32 s1, l_int32 c2,
  * \brief   boxContains()
  *
  * \param[in]    box1, box2
- * \param[out]   presult 1 if box2 is entirely contained within
- *                       box1, and 0 otherwise
+ * \param[out]   presult     1 if box2 is entirely contained within box1;
+ *                           0 otherwise
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 boxContains(BOX     *box1,
             BOX     *box2,
             l_int32 *presult)
 {
-l_int32  x1, y1, w1, h1, x2, y2, w2, h2;
+l_int32  x1, y1, w1, h1, x2, y2, w2, h2, valid1, valid2;
 
     PROCNAME("boxContains");
 
@@ -108,7 +109,11 @@ l_int32  x1, y1, w1, h1, x2, y2, w2, h2;
         return ERROR_INT("&result not defined", procName, 1);
     *presult = 0;
     if (!box1 || !box2)
-        return ERROR_INT("box1 and box2 not both defined", procName, 1);
+        return ERROR_INT("boxes not both defined", procName, 1);
+    boxIsValid(box1, &valid1);
+    boxIsValid(box2, &valid2);
+    if (!valid1 || !valid2)
+        return ERROR_INT("boxes not both valid", procName, 1);
 
     boxGetGeometry(box1, &x1, &y1, &w1, &h1);
     boxGetGeometry(box2, &x2, &y2, &w2, &h2);
@@ -122,16 +127,16 @@ l_int32  x1, y1, w1, h1, x2, y2, w2, h2;
  * \brief   boxIntersects()
  *
  * \param[in]    box1, box2
- * \param[out]   presult 1 if any part of box2 is contained
- *                      in box1, and 0 otherwise
+ * \param[out]   presult    1 if any part of box2 is contained in box1;
+ *                          0 otherwise
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 boxIntersects(BOX      *box1,
               BOX      *box2,
               l_int32  *presult)
 {
-l_int32  l1, l2, r1, r2, t1, t2, b1, b2, w1, h1, w2, h2;
+l_int32  l1, l2, r1, r2, t1, t2, b1, b2, w1, h1, w2, h2, valid1, valid2;
 
     PROCNAME("boxIntersects");
 
@@ -139,7 +144,11 @@ l_int32  l1, l2, r1, r2, t1, t2, b1, b2, w1, h1, w2, h2;
         return ERROR_INT("&result not defined", procName, 1);
     *presult = 0;
     if (!box1 || !box2)
-        return ERROR_INT("box1 and box2 not both defined", procName, 1);
+        return ERROR_INT("boxes not both defined", procName, 1);
+    boxIsValid(box1, &valid1);
+    boxIsValid(box2, &valid2);
+    if (!valid1 || !valid2)
+        return ERROR_INT("boxes not both valid", procName, 1);
 
     boxGetGeometry(box1, &l1, &t1, &w1, &h1);
     boxGetGeometry(box2, &l2, &t2, &w2, &h2);
@@ -159,21 +168,22 @@ l_int32  l1, l2, r1, r2, t1, t2, b1, b2, w1, h1, w2, h2;
  * \brief   boxaContainedInBox()
  *
  * \param[in]    boxas
- * \param[in]    box for containment
- * \return  boxad boxa with all boxes in boxas that are
- *                     entirely contained in box, or NULL on error
+ * \param[in]    box     for containment
+ * \return  boxad  boxa with all boxes in boxas that are entirely
+ *                 contained in box, or NULL on error
  *
  * <pre>
  * Notes:
- *      (1) All boxes in boxa that are entirely outside box are removed.
+ *      (1) All boxes in %boxas that are entirely outside box are removed.
+ *      (2) If %box is not valid, returns an empty boxa.
  * </pre>
  */
 BOXA *
 boxaContainedInBox(BOXA  *boxas,
                    BOX   *box)
 {
-l_int32  i, n, val;
-BOX     *boxt;
+l_int32  i, n, val, valid;
+BOX     *box1;
 BOXA    *boxad;
 
     PROCNAME("boxaContainedInBox");
@@ -182,16 +192,19 @@ BOXA    *boxad;
         return (BOXA *)ERROR_PTR("boxas not defined", procName, NULL);
     if (!box)
         return (BOXA *)ERROR_PTR("box not defined", procName, NULL);
-    if ((n = boxaGetCount(boxas)) == 0)
+    n = boxaGetCount(boxas);
+    boxIsValid(box, &valid);
+    if (n == 0 || !valid)
         return boxaCreate(1);  /* empty */
 
     boxad = boxaCreate(0);
     for (i = 0; i < n; i++) {
-        boxt = boxaGetBox(boxas, i, L_CLONE);
-        boxContains(box, boxt, &val);
+        if ((box1 = boxaGetValidBox(boxas, i, L_CLONE)) == NULL)
+            continue;
+        boxContains(box, box1, &val);
         if (val == 1)
-            boxaAddBox(boxad, boxt, L_COPY);
-        boxDestroy(&boxt);  /* destroy the clone */
+            boxaAddBox(boxad, box1, L_COPY);
+        boxDestroy(&box1);  /* destroy the clone */
     }
 
     return boxad;
@@ -205,13 +218,18 @@ BOXA    *boxad;
  * \param[in]    box      for selecting contained boxes in %boxa
  * \param[out]   pcount   number of boxes intersecting the box
  * \return  0 if OK, 1 on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) If %box is not valid, returns a zero count.
+ * </pre>
  */
-l_int32
+l_ok
 boxaContainedInBoxCount(BOXA     *boxa,
                         BOX      *box,
                         l_int32  *pcount)
 {
-l_int32  i, n, val;
+l_int32  i, n, val, valid;
 BOX     *box1;
 
     PROCNAME("boxaContainedInBoxCount");
@@ -223,11 +241,14 @@ BOX     *box1;
         return ERROR_INT("boxa not defined", procName, 1);
     if (!box)
         return ERROR_INT("box not defined", procName, 1);
-    if ((n = boxaGetCount(boxa)) == 0)
+    n = boxaGetCount(boxa);
+    boxIsValid(box, &valid);
+    if (n == 0 || !valid)
         return 0;
 
     for (i = 0; i < n; i++) {
-        box1 = boxaGetBox(boxa, i, L_CLONE);
+        if ((box1 = boxaGetValidBox(boxa, i, L_CLONE)) == NULL)
+            continue;
         boxContains(box, box1, &val);
         if (val == 1)
             (*pcount)++;
@@ -245,7 +266,7 @@ BOX     *box1;
  *                              some box in boxa1; 0 otherwise
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 boxaContainedInBoxa(BOXA     *boxa1,
                     BOXA     *boxa2,
                     l_int32  *pcontained)
@@ -264,10 +285,12 @@ BOX     *box1, *box2;
     n1 = boxaGetCount(boxa1);
     n2 = boxaGetCount(boxa2);
     for (i = 0; i < n2; i++) {
-        box2 = boxaGetBox(boxa2, i, L_CLONE);
+        if ((box2 = boxaGetValidBox(boxa2, i, L_CLONE)) == NULL)
+            continue;
         cont = 0;
         for (j = 0; j < n1; j++) {
-            box1 = boxaGetBox(boxa1, j, L_CLONE);
+            if ((box1 = boxaGetValidBox(boxa1, j, L_CLONE)) == NULL)
+                continue;
             boxContains(box1, box2, &result);
             boxDestroy(&box1);
             if (result) {
@@ -288,9 +311,9 @@ BOX     *box1, *box2;
  * \brief   boxaIntersectsBox()
  *
  * \param[in]    boxas
- * \param[in]    box for intersecting
- * \return  boxad boxa with all boxes in boxas that intersect box,
- *                     or NULL on error
+ * \param[in]    box     for intersecting
+ * \return  boxad    boxa with all boxes in boxas that intersect box,
+ *                   or NULL on error
  *
  * <pre>
  * Notes:
@@ -302,8 +325,8 @@ BOXA *
 boxaIntersectsBox(BOXA  *boxas,
                   BOX   *box)
 {
-l_int32  i, n, val;
-BOX     *boxt;
+l_int32  i, n, val, valid;
+BOX     *box1;
 BOXA    *boxad;
 
     PROCNAME("boxaIntersectsBox");
@@ -312,16 +335,19 @@ BOXA    *boxad;
         return (BOXA *)ERROR_PTR("boxas not defined", procName, NULL);
     if (!box)
         return (BOXA *)ERROR_PTR("box not defined", procName, NULL);
-    if ((n = boxaGetCount(boxas)) == 0)
+    n = boxaGetCount(boxas);
+    boxIsValid(box, &valid);
+    if (n == 0 || !valid)
         return boxaCreate(1);  /* empty */
 
     boxad = boxaCreate(0);
     for (i = 0; i < n; i++) {
-        boxt = boxaGetBox(boxas, i, L_CLONE);
-        boxIntersects(box, boxt, &val);
+        if ((box1 = boxaGetValidBox(boxas, i, L_CLONE)) == NULL)
+            continue;
+        boxIntersects(box, box1, &val);
         if (val == 1)
-            boxaAddBox(boxad, boxt, L_COPY);
-        boxDestroy(&boxt);  /* destroy the clone */
+            boxaAddBox(boxad, box1, L_COPY);
+        boxDestroy(&box1);  /* destroy the clone */
     }
 
     return boxad;
@@ -336,12 +362,12 @@ BOXA    *boxad;
  * \param[out]   pcount   number of boxes intersecting the box
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 boxaIntersectsBoxCount(BOXA     *boxa,
                        BOX      *box,
                        l_int32  *pcount)
 {
-l_int32  i, n, val;
+l_int32  i, n, val, valid;
 BOX     *box1;
 
     PROCNAME("boxaIntersectsBoxCount");
@@ -353,11 +379,14 @@ BOX     *box1;
         return ERROR_INT("boxa not defined", procName, 1);
     if (!box)
         return ERROR_INT("box not defined", procName, 1);
-    if ((n = boxaGetCount(boxa)) == 0)
+    n = boxaGetCount(boxa);
+    boxIsValid(box, &valid);
+    if (n == 0 || !valid)
         return 0;
 
     for (i = 0; i < n; i++) {
-        box1 = boxaGetBox(boxa, i, L_CLONE);
+        if ((box1 = boxaGetValidBox(boxa, i, L_CLONE)) == NULL)
+            continue;
         boxIntersects(box, box1, &val);
         if (val == 1)
             (*pcount)++;
@@ -371,9 +400,8 @@ BOX     *box1;
  * \brief   boxaClipToBox()
  *
  * \param[in]    boxas
- * \param[in]    box for clipping
- * \return  boxad boxa with boxes in boxas clipped to box,
- *                     or NULL on error
+ * \param[in]    box     for clipping
+ * \return  boxad     boxa with boxes in boxas clipped to box, or NULL on error
  *
  * <pre>
  * Notes:
@@ -385,8 +413,8 @@ BOXA *
 boxaClipToBox(BOXA  *boxas,
               BOX   *box)
 {
-l_int32  i, n;
-BOX     *boxt, *boxo;
+l_int32  i, n, valid;
+BOX     *box1, *boxo;
 BOXA    *boxad;
 
     PROCNAME("boxaClipToBox");
@@ -395,15 +423,18 @@ BOXA    *boxad;
         return (BOXA *)ERROR_PTR("boxas not defined", procName, NULL);
     if (!box)
         return (BOXA *)ERROR_PTR("box not defined", procName, NULL);
-    if ((n = boxaGetCount(boxas)) == 0)
+    n = boxaGetCount(boxas);
+    boxIsValid(box, &valid);
+    if (n == 0 || !valid)
         return boxaCreate(1);  /* empty */
 
     boxad = boxaCreate(0);
     for (i = 0; i < n; i++) {
-        boxt = boxaGetBox(boxas, i, L_CLONE);
-        if ((boxo = boxOverlapRegion(box, boxt)) != NULL)
+        if ((box1 = boxaGetValidBox(boxas, i, L_CLONE)) == NULL)
+            continue;
+        if ((boxo = boxOverlapRegion(box, box1)) != NULL)
             boxaAddBox(boxad, boxo, L_INSERT);
-        boxDestroy(&boxt);
+        boxDestroy(&box1);
     }
 
     return boxad;
@@ -415,9 +446,8 @@ BOXA    *boxad;
  *
  * \param[in]       boxas
  * \param[in,out]   pixadb     debug output
- * \return  boxad where each set of boxes in boxas that overlap are
- *                     combined into a single bounding box in boxad, or
- *                     NULL on error.
+ * \return  boxad   where each set of boxes in boxas that overlap are combined
+ *                  into a single bounding box in boxad, or NULL on error.
  *
  * <pre>
  * Notes:
@@ -532,7 +562,7 @@ PIX     *pix1;
  *          to have only one operation on any rectangular region.
  * </pre>
  */
-l_int32
+l_ok
 boxaCombineOverlapsInPair(BOXA   *boxas1,
                           BOXA   *boxas2,
                           BOXA  **pboxad1,
@@ -661,9 +691,9 @@ PIX     *pix1;
 /*!
  * \brief   boxOverlapRegion()
  *
- * \param[in]    box1, box2 two boxes
- * \return  box of overlap region between input boxes,
- *              or NULL if no overlap or on error
+ * \param[in]    box1, box2
+ * \return  box     of overlap region between input boxes;
+ *                  NULL if no overlap or on error
  *
  * <pre>
  * Notes:
@@ -675,13 +705,18 @@ boxOverlapRegion(BOX  *box1,
                  BOX  *box2)
 {
 l_int32  l1, l2, r1, r2, t1, t2, b1, b2, w1, h1, w2, h2, ld, td, rd, bd;
+l_int32  valid1, valid2;
 
     PROCNAME("boxOverlapRegion");
 
-    if (!box1)
-        return (BOX *)ERROR_PTR("box1 not defined", procName, NULL);
-    if (!box2)
-        return (BOX *)ERROR_PTR("box2 not defined", procName, NULL);
+    if (!box1 || !box2)
+        return (BOX *)ERROR_PTR("boxes not both defined", procName, NULL);
+    boxIsValid(box1, &valid1);
+    boxIsValid(box2, &valid2);
+    if (!valid1 || !valid2) {
+        L_WARNING("at least one box is invalid\n", procName);
+        return NULL;
+    }
 
     boxGetGeometry(box1, &l1, &t1, &w1, &h1);
     boxGetGeometry(box2, &l2, &t2, &w2, &h2);
@@ -703,13 +738,16 @@ l_int32  l1, l2, r1, r2, t1, t2, b1, b2, w1, h1, w2, h2, ld, td, rd, bd;
 /*!
  * \brief   boxBoundingRegion()
  *
- * \param[in]    box1, box2 two boxes
- * \return  box of bounding region containing the input boxes,
- *              or NULL on error
+ * \param[in]    box1, box2
+ * \return  box  of bounding region containing the input boxes;
+ *               NULL on error
  *
  * <pre>
  * Notes:
  *      (1) This is the geometric union of the two rectangles.
+ *      (2) Invalid boxes are ignored.  This returns an invalid box
+ *          if both input boxes are invalid.
+ *      (3) For the geometric union of a boxa, use boxaGetExtent().
  * </pre>
  */
 BOX *
@@ -717,13 +755,22 @@ boxBoundingRegion(BOX  *box1,
                   BOX  *box2)
 {
 l_int32  l1, l2, r1, r2, t1, t2, b1, b2, w1, h1, w2, h2, ld, td, rd, bd;
+l_int32  valid1, valid2;
 
     PROCNAME("boxBoundingRegion");
 
-    if (!box1)
-        return (BOX *)ERROR_PTR("box1 not defined", procName, NULL);
-    if (!box2)
-        return (BOX *)ERROR_PTR("box2 not defined", procName, NULL);
+    if (!box1 || !box2)
+        return (BOX *)ERROR_PTR("boxes not both defined", procName, NULL);
+    boxIsValid(box1, &valid1);
+    boxIsValid(box2, &valid2);
+    if (!valid1 && !valid2) {
+        L_WARNING("both boxes are invalid\n", procName);
+        return boxCreate(0, 0, 0, 0);
+    }
+    if (valid1 && !valid2)
+        return boxCopy(box1);
+    if (!valid1 && valid2)
+        return boxCopy(box2);
 
     boxGetGeometry(box1, &l1, &t1, &w1, &h1);
     boxGetGeometry(box2, &l2, &t2, &w2, &h2);
@@ -742,22 +789,23 @@ l_int32  l1, l2, r1, r2, t1, t2, b1, b2, w1, h1, w2, h2, ld, td, rd, bd;
 /*!
  * \brief   boxOverlapFraction()
  *
- * \param[in]    box1, box2 two boxes
- * \param[out]   pfract the fraction of box2 overlapped by box1
+ * \param[in]    box1, box2
+ * \param[out]   pfract      the fraction of box2 overlapped by box1
  * \return  0 if OK, 1 on error.
  *
  * <pre>
  * Notes:
  *      (1) The result depends on the order of the input boxes,
  *          because the overlap is taken as a fraction of box2.
+ *      (2) If at least one box is not valid, there is no overlap.
  * </pre>
  */
-l_int32
+l_ok
 boxOverlapFraction(BOX        *box1,
                    BOX        *box2,
                    l_float32  *pfract)
 {
-l_int32  w2, h2, w, h;
+l_int32  w2, h2, w, h, valid1, valid2;
 BOX     *boxo;
 
     PROCNAME("boxOverlapFraction");
@@ -765,10 +813,14 @@ BOX     *boxo;
     if (!pfract)
         return ERROR_INT("&fract not defined", procName, 1);
     *pfract = 0.0;
-    if (!box1)
-        return ERROR_INT("box1 not defined", procName, 1);
-    if (!box2)
-        return ERROR_INT("box2 not defined", procName, 1);
+    if (!box1 || !box2)
+        return ERROR_INT("boxes not both defined", procName, 1);
+    boxIsValid(box1, &valid1);
+    boxIsValid(box2, &valid2);
+    if (!valid1 || !valid2) {
+        L_WARNING("boxes not both valid\n", procName);
+        return 0;
+    }
 
     if ((boxo = boxOverlapRegion(box1, box2)) == NULL)  /* no overlap */
         return 0;
@@ -784,16 +836,16 @@ BOX     *boxo;
 /*!
  * \brief   boxOverlapArea()
  *
- * \param[in]    box1, box2 two boxes
- * \param[out]   parea the number of pixels in the overlap
+ * \param[in]    box1, box2
+ * \param[out]   parea       the number of pixels in the overlap
  * \return  0 if OK, 1 on error.
  */
-l_int32
+l_ok
 boxOverlapArea(BOX      *box1,
                BOX      *box2,
                l_int32  *parea)
 {
-l_int32  w, h;
+l_int32  w, h, valid1, valid2;
 BOX     *box;
 
     PROCNAME("boxOverlapArea");
@@ -801,10 +853,12 @@ BOX     *box;
     if (!parea)
         return ERROR_INT("&area not defined", procName, 1);
     *parea = 0;
-    if (!box1)
-        return ERROR_INT("box1 not defined", procName, 1);
-    if (!box2)
-        return ERROR_INT("box2 not defined", procName, 1);
+    if (!box1 || !box2)
+        return ERROR_INT("boxes not both defined", procName, 1);
+    boxIsValid(box1, &valid1);
+    boxIsValid(box2, &valid2);
+    if (!valid1 || !valid2)
+        return ERROR_INT("boxes not both valid", procName, 1);
 
     if ((box = boxOverlapRegion(box1, box2)) == NULL)  /* no overlap */
         return 0;
@@ -820,13 +874,14 @@ BOX     *box;
  * \brief   boxaHandleOverlaps()
  *
  * \param[in]    boxas
- * \param[in]    op L_COMBINE, L_REMOVE_SMALL
- * \param[in]    range > 0, forward distance over which overlaps are checked
- * \param[in]    min_overlap minimum fraction of smaller box required for
- *                           overlap to count; 0.0 to ignore
- * \param[in]    max_ratio maximum fraction of small/large areas for
- *                         overlap to count; 1.0 to ignore
- * \param[out]   pnamap [optional] combining map
+ * \param[in]    op            L_COMBINE, L_REMOVE_SMALL
+ * \param[in]    range         forward distance over which overlaps
+ *                             are checked; > 0
+ * \param[in]    min_overlap   minimum fraction of smaller box required for
+ *                             overlap to count; 0.0 to ignore
+ * \param[in]    max_ratio     maximum fraction of small/large areas for
+ *                             overlap to count; 1.0 to ignore
+ * \param[out]   pnamap        [optional] combining map
  * \return  boxad, or NULL on error.
  *
  * <pre>
@@ -883,7 +938,8 @@ NUMA      *namap;
         /* Identify smaller boxes in overlap pairs, and mark to eliminate. */
     namap = numaMakeConstant(-1, n);
     for (i = 0; i < n; i++) {
-        box1 = boxaGetBox(boxas, i, L_CLONE);
+        if ((box1 = boxaGetValidBox(boxas, i, L_CLONE)) == NULL)
+            continue;
         boxGetGeometry(box1, NULL, NULL, &w, &h);
         area1 = w * h;
         if (area1 == 0) {
@@ -891,7 +947,8 @@ NUMA      *namap;
             continue;
         }
         for (j = i + 1; j < i + 1 + range && j < n; j++) {
-            box2 = boxaGetBox(boxas, j, L_CLONE);
+            if ((box2 = boxaGetValidBox(boxas, j, L_CLONE)) == NULL)
+                continue;
             boxOverlapArea(box1, box2, &overlap_area);
             if (overlap_area > 0) {
                 boxGetGeometry(box2, NULL, NULL, &w, &h);
@@ -956,9 +1013,9 @@ NUMA      *namap;
 /*!
  * \brief   boxSeparationDistance()
  *
- * \param[in]    box1, box2 two boxes, in any order
- * \param[out]   ph_sep [optional] horizontal separation
- * \param[out]   pv_sep [optional] vertical separation
+ * \param[in]    box1, box2    two boxes, in any order
+ * \param[out]   ph_sep        [optional] horizontal separation
+ * \param[out]   pv_sep        [optional] vertical separation
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -969,13 +1026,13 @@ NUMA      *namap;
  *          a distance d, the returned separation is -d.
  * </pre>
  */
-l_int32
+l_ok
 boxSeparationDistance(BOX      *box1,
                       BOX      *box2,
                       l_int32  *ph_sep,
                       l_int32  *pv_sep)
 {
-l_int32  l1, t1, w1, h1, r1, b1, l2, t2, w2, h2, r2, b2;
+l_int32  l1, t1, w1, h1, r1, b1, l2, t2, w2, h2, r2, b2, valid1, valid2;
 
     PROCNAME("boxSeparationDistance");
 
@@ -984,7 +1041,11 @@ l_int32  l1, t1, w1, h1, r1, b1, l2, t2, w2, h2, r2, b2;
     if (ph_sep) *ph_sep = 0;
     if (pv_sep) *pv_sep = 0;
     if (!box1 || !box2)
-        return ERROR_INT("box1 and box2 not both defined", procName, 1);
+        return ERROR_INT("boxes not both defined", procName, 1);
+    boxIsValid(box1, &valid1);
+    boxIsValid(box2, &valid2);
+    if (!valid1 || !valid2)
+        return ERROR_INT("boxes not both valid", procName, 1);
 
     if (ph_sep) {
         boxGetGeometry(box1, &l1, NULL, &w1, NULL);
@@ -1017,7 +1078,7 @@ l_int32  l1, t1, w1, h1, r1, b1, l2, t2, w2, h2, r2, b2;
  * \param[in]    type     L_SORT_BY_WIDTH, L_SORT_BY_HEIGHT,
  *                        L_SORT_BY_MAX_DIMENSION, L_SORT_BY_PERIMETER,
  *                        L_SORT_BY_AREA,
- * \param[out]   prel   1 if box1 > box2, 0 if the same, -1 if box1 < box2
+ * \param[out]   prel     1 if box1 > box2, 0 if the same, -1 if box1 < box2
  * \return   0 if OK, 1 on error
  *
  * <pre>
@@ -1025,13 +1086,13 @@ l_int32  l1, t1, w1, h1, r1, b1, l2, t2, w2, h2, r2, b2;
  *      (1) We're re-using the SORT enum for these comparisons.
  * </pre>
  */
-l_int32
+l_ok
 boxCompareSize(BOX      *box1,
                BOX      *box2,
                l_int32   type,
                l_int32  *prel)
 {
-l_int32  w1, h1, w2, h2, size1, size2;
+l_int32  w1, h1, w2, h2, size1, size2, valid1, valid2;
 
     PROCNAME("boxCompareSize");
 
@@ -1039,7 +1100,11 @@ l_int32  w1, h1, w2, h2, size1, size2;
         return ERROR_INT("&rel not defined", procName, 1);
     *prel = 0;
     if (!box1 || !box2)
-        return ERROR_INT("box1 and box2 not both defined", procName, 1);
+        return ERROR_INT("boxes not both defined", procName, 1);
+    boxIsValid(box1, &valid1);
+    boxIsValid(box2, &valid2);
+    if (!valid1 || !valid2)
+        return ERROR_INT("boxes not both valid", procName, 1);
     if (type != L_SORT_BY_WIDTH && type != L_SORT_BY_HEIGHT &&
         type != L_SORT_BY_MAX_DIMENSION && type != L_SORT_BY_PERIMETER &&
         type != L_SORT_BY_AREA)
@@ -1072,11 +1137,11 @@ l_int32  w1, h1, w2, h2, size1, size2;
  * \brief   boxContainsPt()
  *
  * \param[in]    box
- * \param[in]    x, y a point
- * \param[out]   pcontains 1 if box contains point; 0 otherwise
+ * \param[in]    x, y        a point
+ * \param[out]   pcontains   1 if box contains point; 0 otherwise
  * \return  0 if OK, 1 on error.
  */
-l_int32
+l_ok
 boxContainsPt(BOX       *box,
               l_float32  x,
               l_float32  y,
@@ -1102,9 +1167,9 @@ l_int32  bx, by, bw, bh;
  * \brief   boxaGetNearestToPt()
  *
  * \param[in]    boxa
- * \param[in]    x, y  point
- * \return  box with centroid closest to the given point [x,y],
- *              or NULL if no boxes in boxa
+ * \param[in]    x, y    point
+ * \return  box   with centroid closest to the given point [x,y],
+ *                or NULL if no boxes in boxa
  *
  * <pre>
  * Notes:
@@ -1130,7 +1195,8 @@ BOX       *box;
     mindist = 1000000000.;
     minindex = 0;
     for (i = 0; i < n; i++) {
-        box = boxaGetBox(boxa, i, L_CLONE);
+        if ((box = boxaGetValidBox(boxa, i, L_CLONE)) == NULL)
+            continue;
         boxGetCenter(box, &cx, &cy);
         delx = (l_float32)(cx - x);
         dely = (l_float32)(cy - y);
@@ -1151,8 +1217,8 @@ BOX       *box;
  *
  * \param[in]    boxa
  * \param[in]    x, y   (y = -1 for vertical line; x = -1 for horiz line)
- * \return  box with centroid closest to the given line,
- *              or NULL if no boxes in boxa
+ * \return  box  with centroid closest to the given line,
+ *               or NULL if no boxes in boxa
  *
  * <pre>
  * Notes:
@@ -1186,7 +1252,8 @@ BOX       *box;
     mindist = 1000000000.;
     minindex = 0;
     for (i = 0; i < n; i++) {
-        box = boxaGetBox(boxa, i, L_CLONE);
+        if ((box = boxaGetValidBox(boxa, i, L_CLONE)) == NULL)
+            continue;
         boxGetCenter(box, &cx, &cy);
         if (x >= 0)
             dist = L_ABS(cx - (l_float32)x);
@@ -1212,7 +1279,7 @@ BOX       *box;
  *                            entire boxa (e.g., if it's not 2D sorted)
  * \param[out]   pnaaindex    for each box in %boxa, contains a numa of 4
  *                            box indices (per direction) of the nearest box
- * \param[out]   pnaadist   for each box in %boxa, this contains a numa
+ * \param[out]   pnaadist     for each box in %boxa, this contains a numa
  * \return  0 if OK, 1 on error
  * <pre>
  * Notes:
@@ -1220,7 +1287,7 @@ BOX       *box;
  *          and %range.
  * </pre>
  */
-l_int32
+l_ok
 boxaFindNearestBoxes(BOXA     *boxa,
                      l_int32   dist_select,
                      l_int32   range,
@@ -1301,7 +1368,7 @@ NUMAA   *naai, *naad;
  *          directions.
  * </pre>
  */
-l_int32
+l_ok
 boxaGetNearestByDirection(BOXA     *boxa,
                           l_int32   i,
                           l_int32   dir,
@@ -1438,9 +1505,9 @@ l_int32  dist;
  *
  * \param[in]    box
  * \param[out]   pcx, pcy location of center of box
- * \return  0 if OK, 1 on error
+ * \return  0 if OK, 1 on error or if box is not valid
  */
-l_int32
+l_ok
 boxGetCenter(BOX        *box,
              l_float32  *pcx,
              l_float32  *pcy)
@@ -1456,6 +1523,7 @@ l_int32  x, y, w, h;
     if (!box)
         return ERROR_INT("box not defined", procName, 1);
     boxGetGeometry(box, &x, &y, &w, &h);
+    if (w == 0 || h == 0) return 1;
     *pcx = (l_float32)(x + 0.5 * w);
     *pcy = (l_float32)(y + 0.5 * h);
 
@@ -1472,7 +1540,7 @@ l_int32  x, y, w, h;
  * \param[out]   px1, py1 1st point of intersection with box
  * \param[out]   px2, py2 2nd point of intersection with box
  * \param[out]   pn number of points of intersection
- * \return  0 if OK, 1 on error
+ * \return  0 if OK, 1 on error or if box is not valid
  *
  * <pre>
  * Notes:
@@ -1481,7 +1549,7 @@ l_int32  x, y, w, h;
  *      (2) Represent a vertical line by one with a large but finite slope.
  * </pre>
  */
-l_int32
+l_ok
 boxIntersectByLine(BOX       *box,
                    l_int32    x,
                    l_int32    y,
@@ -1510,6 +1578,7 @@ PTA       *pta;
     if (!box)
         return ERROR_INT("box not defined", procName, 1);
     boxGetGeometry(box, &bx, &by, &bw, &bh);
+    if (bw == 0 || bh == 0) return 1;
 
     if (slope == 0.0) {
         if (y >= by && y < by + bh) {
@@ -1574,7 +1643,7 @@ PTA       *pta;
  * \param[in]    box
  * \param[in]    wi, hi rectangle representing image
  * \return  part of box within given rectangle, or NULL on error
- *              or if box is entirely outside the rectangle
+ *          or if box is entirely outside the rectangle
  *
  * <pre>
  * Notes:
@@ -1640,7 +1709,7 @@ BOX  *boxd;
  *                     ....
  * </pre>
  */
-l_int32
+l_ok
 boxClipToRectangleParams(BOX      *box,
                          l_int32   w,
                          l_int32   h,
@@ -1690,7 +1759,7 @@ BOX     *boxc;
  * \param[in]    loc new location of the side that is changing
  * \param[in]    sideflag L_FROM_LEFT, etc., indicating the side that moves
  * \return  boxd, or NULL on error or if the computed boxd has
- *              width or height <= 0.
+ *          width or height <= 0.
  *
  * <pre>
  * Notes:
@@ -1718,6 +1787,8 @@ l_int32  x, y, w, h;
         boxd = boxCopy(boxs);
 
     boxGetGeometry(boxs, &x, &y, &w, &h);
+    if (w == 0 || h == 0)
+        return boxd;
     if (sideflag == L_FROM_LEFT)
         boxSetGeometry(boxd, loc, -1, w + x - loc, -1);
     else if (sideflag == L_FROM_RIGHT)
@@ -1782,13 +1853,13 @@ BOXA    *boxad;
 /*!
  * \brief   boxAdjustSides()
  *
- * \param[in]    boxd  [optional]; this can be null, equal to boxs,
- *                     or different from boxs
- * \param[in]    boxs  starting box; to have sides adjusted
- * \param[in]    delleft, delright, deltop, delbot changes in location of
- *                                                 each side
+ * \param[in]    boxd     [optional]; this can be null, equal to boxs,
+ *                        or different from boxs
+ * \param[in]    boxs     starting box; to have sides adjusted
+ * \param[in]    delleft, delright, deltop, delbot    changes in location
+ *                                                    of each side
  * \return  boxd, or NULL on error or if the computed boxd has
- *              width or height <= 0.
+ *          width or height <= 0.
  *
  * <pre>
  * Notes:
@@ -1839,11 +1910,11 @@ l_int32  x, y, w, h, xl, xr, yt, yb, wnew, hnew;
 /*!
  * \brief   boxaSetSide()
  *
- * \param[in]    boxad use NULL to get a new one; same as boxas for in-place
+ * \param[in]    boxad    use NULL to get a new one; same as boxas for in-place
  * \param[in]    boxas
- * \param[in]    side L_SET_LEFT, L_SET_RIGHT, L_SET_TOP, L_SET_BOT
- * \param[in]    val location to set for given side, for each box
- * \param[in]    thresh min abs difference to cause resetting to %val
+ * \param[in]    side     L_SET_LEFT, L_SET_RIGHT, L_SET_TOP, L_SET_BOT
+ * \param[in]    val      location to set for given side, for each box
+ * \param[in]    thresh   min abs difference to cause resetting to %val
  * \return  boxad, or NULL on error
  *
  * <pre>
@@ -1862,7 +1933,7 @@ boxaSetSide(BOXA    *boxad,
             l_int32  val,
             l_int32  thresh)
 {
-l_int32  x, y, w, h, n, i, diff;
+l_int32  n, i;
 BOX     *box;
 
     PROCNAME("boxaSetSide");
@@ -1882,25 +1953,8 @@ BOX     *box;
     n = boxaGetCount(boxad);
     for (i = 0; i < n; i++) {
         box = boxaGetBox(boxad, i, L_CLONE);
-        boxGetGeometry(box, &x, &y, &w, &h);
-        if (side == L_SET_LEFT) {
-            diff = x - val;
-            if (L_ABS(diff) >= thresh)
-                boxSetGeometry(box, val, y, w + diff, h);
-        } else if (side == L_SET_RIGHT) {
-            diff = x + w -1 - val;
-            if (L_ABS(diff) >= thresh)
-                boxSetGeometry(box, x, y, val - x + 1, h);
-        } else if (side == L_SET_TOP) {
-            diff = y - val;
-            if (L_ABS(diff) >= thresh)
-                boxSetGeometry(box, x, val, w, h + diff);
-        } else { /* side == L_SET_BOT */
-            diff = y + h - 1 - val;
-            if (L_ABS(diff) >= thresh)
-                boxSetGeometry(box, x, y, w, val - y + 1);
-        }
-        boxDestroy(&box);
+        boxSetSide(box, side, val, thresh);
+        boxDestroy(&box);  /* the clone */
     }
 
     return boxad;
@@ -1908,13 +1962,69 @@ BOX     *box;
 
 
 /*!
+ * \brief   boxSetSide()
+ *
+ * \param[in]    boxs
+ * \param[in]    side     L_SET_LEFT, L_SET_RIGHT, L_SET_TOP, L_SET_BOT
+ * \param[in]    val      location to set for given side, for each box
+ * \param[in]    thresh   min abs difference to cause resetting to %val
+ * \return  0 if OK, 1 on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) In-place operation.
+ *      (2) Use %thresh = 0 to definitely set the side to %val.
+ * </pre>
+ */
+l_ok
+boxSetSide(BOX     *boxs,
+           l_int32  side,
+           l_int32  val,
+           l_int32  thresh)
+{
+l_int32  x, y, w, h, diff;
+
+    PROCNAME("boxSetSide");
+
+    if (!boxs)
+        return ERROR_INT("box not defined", procName, 1);
+    if (side != L_SET_LEFT && side != L_SET_RIGHT &&
+        side != L_SET_TOP && side != L_SET_BOT)
+        return ERROR_INT("invalid side", procName, 1);
+    if (val < 0)
+        return ERROR_INT("val < 0", procName, 1);
+
+    boxGetGeometry(boxs, &x, &y, &w, &h);
+    if (side == L_SET_LEFT) {
+        diff = x - val;
+        if (L_ABS(diff) >= thresh)
+            boxSetGeometry(boxs, val, y, w + diff, h);
+    } else if (side == L_SET_RIGHT) {
+        diff = x + w -1 - val;
+        if (L_ABS(diff) >= thresh)
+            boxSetGeometry(boxs, x, y, val - x + 1, h);
+    } else if (side == L_SET_TOP) {
+        diff = y - val;
+        if (L_ABS(diff) >= thresh)
+            boxSetGeometry(boxs, x, val, w, h + diff);
+    } else { /* side == L_SET_BOT */
+        diff = y + h - 1 - val;
+        if (L_ABS(diff) >= thresh)
+            boxSetGeometry(boxs, x, y, w, val - y + 1);
+    }
+
+    return 0;
+}
+
+
+/*!
  * \brief   boxaAdjustWidthToTarget()
  *
- * \param[in]    boxad use NULL to get a new one; same as boxas for in-place
+ * \param[in]    boxad    use NULL to get a new one; same as boxas for in-place
  * \param[in]    boxas
- * \param[in]    sides L_ADJUST_LEFT, L_ADJUST_RIGHT, L_ADJUST_LEFT_AND_RIGHT
- * \param[in]    target target width if differs by more than thresh
- * \param[in]    thresh min abs difference in width to cause adjustment
+ * \param[in]    sides    L_ADJUST_LEFT, L_ADJUST_RIGHT, L_ADJUST_LEFT_AND_RIGHT
+ * \param[in]    target   target width if differs by more than thresh
+ * \param[in]    thresh   min abs difference in width to cause adjustment
  * \return  boxad, or NULL on error
  *
  * <pre>
@@ -1954,7 +2064,8 @@ BOX     *box;
         boxad = boxaCopy(boxas, L_COPY);
     n = boxaGetCount(boxad);
     for (i = 0; i < n; i++) {
-        box = boxaGetBox(boxad, i, L_CLONE);
+        if ((box = boxaGetValidBox(boxad, i, L_CLONE)) == NULL)
+            continue;
         boxGetGeometry(box, &x, &y, &w, &h);
         diff = w - target;
         if (sides == L_ADJUST_LEFT) {
@@ -1977,11 +2088,11 @@ BOX     *box;
 /*!
  * \brief   boxaAdjustHeightToTarget()
  *
- * \param[in]    boxad use NULL to get a new one
+ * \param[in]    boxad    use NULL to get a new one
  * \param[in]    boxas
- * \param[in]    sides L_ADJUST_TOP, L_ADJUST_BOT, L_ADJUST_TOP_AND_BOT
- * \param[in]    target target height if differs by more than thresh
- * \param[in]    thresh min abs difference in height to cause adjustment
+ * \param[in]    sides    L_ADJUST_TOP, L_ADJUST_BOT, L_ADJUST_TOP_AND_BOT
+ * \param[in]    target   target height if differs by more than thresh
+ * \param[in]    thresh   min abs difference in height to cause adjustment
  * \return  boxad, or NULL on error
  *
  * <pre>
@@ -2021,12 +2132,9 @@ BOX     *box;
         boxad = boxaCopy(boxas, L_COPY);
     n = boxaGetCount(boxad);
     for (i = 0; i < n; i++) {
-        box = boxaGetBox(boxad, i, L_CLONE);
-        boxGetGeometry(box, &x, &y, &w, &h);
-        if (w == 0 || h == 0) {  /* invalid; do not alter */
-            boxDestroy(&box);
+        if ((box = boxaGetValidBox(boxad, i, L_CLONE)) == NULL)
             continue;
-        }
+        boxGetGeometry(box, &x, &y, &w, &h);
         diff = h - target;
         if (sides == L_ADJUST_TOP) {
             if (L_ABS(diff) >= thresh)
@@ -2050,10 +2158,10 @@ BOX     *box;
  *
  * \param[in]    box1
  * \param[in]    box2
- * \param[out]   psame 1 if equal; 0 otherwise
+ * \param[out]   psame    1 if equal; 0 otherwise
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 boxEqual(BOX      *box1,
          BOX      *box2,
          l_int32  *psame)
@@ -2064,7 +2172,7 @@ boxEqual(BOX      *box1,
         return ERROR_INT("&same not defined", procName, 1);
     *psame = 0;
     if (!box1 || !box2)
-        return ERROR_INT("box1 and box2 not both defined", procName, 1);
+        return ERROR_INT("boxes not both defined", procName, 1);
     if (box1->x == box2->x && box1->y == box2->y &&
         box1->w == box2->w && box1->h == box2->h)
         *psame = 1;
@@ -2078,8 +2186,8 @@ boxEqual(BOX      *box1,
  * \param[in]    boxa1
  * \param[in]    boxa2
  * \param[in]    maxdist
- * \param[out]   pnaindex [optional] index array of correspondences
- * \param[out]   psame (1 if equal; 0 otherwise
+ * \param[out]   pnaindex     [optional] index array of correspondences
+ * \param[out]   psame        1 if equal; 0 otherwise
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -2100,7 +2208,7 @@ boxEqual(BOX      *box1,
  *          boxa are equal.
  * </pre>
  */
-l_int32
+l_ok
 boxaEqual(BOXA     *boxa1,
           BOXA     *boxa2,
           l_int32   maxdist,
@@ -2169,7 +2277,7 @@ NUMA     *na;
  * \param[in]    box1
  * \param[in]    box2
  * \param[in]    leftdiff, rightdiff, topdiff, botdiff
- * \param[out]   psimilar 1 if similar; 0 otherwise
+ * \param[out]   psimilar   1 if similar; 0 otherwise
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -2179,7 +2287,7 @@ NUMA     *na;
  *          pairs differ by more than this amount, the boxes are not similar.
  * </pre>
  */
-l_int32
+l_ok
 boxSimilar(BOX      *box1,
            BOX      *box2,
            l_int32   leftdiff,
@@ -2188,7 +2296,7 @@ boxSimilar(BOX      *box1,
            l_int32   botdiff,
            l_int32  *psimilar)
 {
-l_int32  l1, l2, r1, r2, t1, t2, b1, b2;
+l_int32  l1, l2, r1, r2, t1, t2, b1, b2, valid1, valid2;
 
     PROCNAME("boxSimilar");
 
@@ -2196,7 +2304,11 @@ l_int32  l1, l2, r1, r2, t1, t2, b1, b2;
         return ERROR_INT("&similar not defined", procName, 1);
     *psimilar = 0;
     if (!box1 || !box2)
-        return ERROR_INT("box1 and box2 not both defined", procName, 1);
+        return ERROR_INT("boxes not both defined", procName, 1);
+    boxIsValid(box1, &valid1);
+    boxIsValid(box2, &valid2);
+    if (!valid1 || !valid2)
+        return ERROR_INT("boxes not both valid", procName, 1);
 
     boxGetSideLocations(box1, &l1, &r1, &t1, &b1);
     boxGetSideLocations(box2, &l2, &r2, &t2, &b2);
@@ -2220,9 +2332,9 @@ l_int32  l1, l2, r1, r2, t1, t2, b1, b2;
  * \param[in]    boxa1
  * \param[in]    boxa2
  * \param[in]    leftdiff, rightdiff, topdiff, botdiff
- * \param[in]    debug output details of non-similar boxes
- * \param[out]   psimilar 1 if similar; 0 otherwise
- * \param[out]   pnasim [optional] na containing 1 if similar; else 0
+ * \param[in]    debug      output details of non-similar boxes
+ * \param[out]   psimilar   1 if similar; 0 otherwise
+ * \param[out]   pnasim     [optional] na containing 1 if similar; else 0
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -2234,7 +2346,7 @@ l_int32  l1, l2, r1, r2, t1, t2, b1, b2;
  *          after failure.
  * </pre>
  */
-l_int32
+l_ok
 boxaSimilar(BOXA     *boxa1,
             BOXA     *boxa2,
             l_int32   leftdiff,
@@ -2294,10 +2406,10 @@ BOX     *box1, *box2;
 /*!
  * \brief   boxaJoin()
  *
- * \param[in]    boxad  dest boxa; add to this one
- * \param[in]    boxas  source boxa; add from this one
- * \param[in]    istart  starting index in boxas
- * \param[in]    iend  ending index in boxas; use -1 to cat all
+ * \param[in]    boxad     dest boxa; add to this one
+ * \param[in]    boxas     source boxa; add from this one
+ * \param[in]    istart    starting index in boxas
+ * \param[in]    iend      ending index in boxas; use -1 to cat all
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -2308,7 +2420,7 @@ BOX     *box1, *box2;
  *      (4) if boxas == NULL or has no boxes, this is a no-op.
  * </pre>
  */
-l_int32
+l_ok
 boxaJoin(BOXA    *boxad,
          BOXA    *boxas,
          l_int32  istart,
@@ -2343,10 +2455,10 @@ BOX     *box;
 /*!
  * \brief   boxaaJoin()
  *
- * \param[in]    baad  dest boxaa; add to this one
- * \param[in]    baas  source boxaa; add from this one
- * \param[in]    istart  starting index in baas
- * \param[in]    iend  ending index in baas; use -1 to cat all
+ * \param[in]    baad     dest boxaa; add to this one
+ * \param[in]    baas     source boxaa; add from this one
+ * \param[in]    istart   starting index in baas
+ * \param[in]    iend     ending index in baas; use -1 to cat all
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -2357,7 +2469,7 @@ BOX     *box;
  *      (4) if baas == NULL, this is a no-op.
  * </pre>
  */
-l_int32
+l_ok
 boxaaJoin(BOXAA   *baad,
           BOXAA   *baas,
           l_int32  istart,
@@ -2394,9 +2506,9 @@ BOXA    *boxa;
  * \brief   boxaSplitEvenOdd()
  *
  * \param[in]    boxa
- * \param[in]    fillflag 1 to put invalid boxes in place; 0 to omit
- * \param[out]   pboxae, pboxao save even and odd boxes in their
- *                 separate boxa, setting the other type to invalid boxes.
+ * \param[in]    fillflag         1 to put invalid boxes in place; 0 to omit
+ * \param[out]   pboxae, pboxao   save even and odd boxes in their separate
+ *                                boxa, setting the other type to invalid boxes.
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -2407,14 +2519,14 @@ BOXA    *boxa;
  *      (2) If %fillflag == 0, boxae has only copies of the even boxes.
  * </pre>
  */
-l_int32
+l_ok
 boxaSplitEvenOdd(BOXA    *boxa,
                  l_int32  fillflag,
                  BOXA   **pboxae,
                  BOXA   **pboxao)
 {
 l_int32  i, n;
-BOX     *box, *boxt;
+BOX     *box, *box1;
 
     PROCNAME("boxaSplitEvenOdd");
 
@@ -2440,12 +2552,12 @@ BOX     *box, *boxt;
     } else {
         for (i = 0; i < n; i++) {
             box = boxaGetBox(boxa, i, L_COPY);
-            boxt = boxCreate(0, 0, 0, 0);  /* empty placeholder */
+            box1 = boxCreate(0, 0, 0, 0);  /* empty placeholder */
             if ((i & 1) == 0) {
                 boxaAddBox(*pboxae, box, L_INSERT);
-                boxaAddBox(*pboxao, boxt, L_INSERT);
+                boxaAddBox(*pboxao, box1, L_INSERT);
             } else {
-                boxaAddBox(*pboxae, boxt, L_INSERT);
+                boxaAddBox(*pboxae, box1, L_INSERT);
                 boxaAddBox(*pboxao, box, L_INSERT);
             }
         }
@@ -2457,9 +2569,9 @@ BOX     *box, *boxt;
 /*!
  * \brief   boxaMergeEvenOdd()
  *
- * \param[in]    boxae boxes to go in even positions in merged boxa
- * \param[in]    boxao boxes to go in odd positions in merged boxa
- * \param[in]    fillflag 1 if there are invalid boxes in placeholders
+ * \param[in]    boxae       boxes to go in even positions in merged boxa
+ * \param[in]    boxao       boxes to go in odd positions in merged boxa
+ * \param[in]    fillflag    1 if there are invalid boxes in placeholders
  * \return  boxad merged, or NULL on error
  *
  * <pre>

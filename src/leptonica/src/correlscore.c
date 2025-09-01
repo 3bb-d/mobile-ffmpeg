@@ -58,16 +58,16 @@
 /*!
  * \brief   pixCorrelationScore()
  *
- * \param[in]    pix1   test pix, 1 bpp
- * \param[in]    pix2   exemplar pix, 1 bpp
- * \param[in]    area1  number of on pixels in pix1
- * \param[in]    area2  number of on pixels in pix2
- * \param[in]    delx   x comp of centroid difference
- * \param[in]    dely   y comp of centroid difference
- * \param[in]    maxdiffw max width difference of pix1 and pix2
- * \param[in]    maxdiffh max height difference of pix1 and pix2
- * \param[in]    tab    sum tab for byte
- * \param[out]   pscore correlation score
+ * \param[in]    pix1       test pix, 1 bpp
+ * \param[in]    pix2       exemplar pix, 1 bpp
+ * \param[in]    area1      number of on pixels in pix1
+ * \param[in]    area2      number of on pixels in pix2
+ * \param[in]    delx       x comp of centroid difference
+ * \param[in]    dely       y comp of centroid difference
+ * \param[in]    maxdiffw   max width difference of pix1 and pix2
+ * \param[in]    maxdiffh   max height difference of pix1 and pix2
+ * \param[in]    tab        sum tab for byte
+ * \param[out]   pscore     correlation score
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -121,7 +121,7 @@
  *  contributed by William Rucklidge.
  * </pre>
  */
-l_int32
+l_ok
 pixCorrelationScore(PIX        *pix1,
                     PIX        *pix2,
                     l_int32     area1,
@@ -368,16 +368,16 @@ l_uint32  *row1, *row2;
 /*!
  * \brief   pixCorrelationScoreThresholded()
  *
- * \param[in]    pix1   test pix, 1 bpp
- * \param[in]    pix2   exemplar pix, 1 bpp
- * \param[in]    area1  number of on pixels in pix1
- * \param[in]    area2  number of on pixels in pix2
- * \param[in]    delx   x comp of centroid difference
- * \param[in]    dely   y comp of centroid difference
- * \param[in]    maxdiffw max width difference of pix1 and pix2
- * \param[in]    maxdiffh max height difference of pix1 and pix2
- * \param[in]    tab    sum tab for byte
- * \param[in]    downcount count of 1 pixels below each row of pix1
+ * \param[in]    pix1         test pix, 1 bpp
+ * \param[in]    pix2         exemplar pix, 1 bpp
+ * \param[in]    area1        number of on pixels in pix1
+ * \param[in]    area2        number of on pixels in pix2
+ * \param[in]    delx         x comp of centroid difference
+ * \param[in]    dely         y comp of centroid difference
+ * \param[in]    maxdiffw     max width difference of pix1 and pix2
+ * \param[in]    maxdiffh     max height difference of pix1 and pix2
+ * \param[in]    tab          sum tab for byte
+ * \param[in]    downcount    count of 1 pixels below each row of pix1
  * \param[in]    score_threshold
  * \return  whether the correlation score is >= score_threshold
  *
@@ -473,7 +473,7 @@ l_int32    threshold;
 
         /* Compute the correlation count that is needed so that
          * count * count / (area1 * area2) >= score_threshold */
-    threshold = (l_int32)ceil(sqrt(score_threshold * area1 * area2));
+    threshold = (l_int32)ceil(sqrt((l_float64)score_threshold * area1 * area2));
 
     count = 0;
     wpl1 = pixGetWpl(pix1);
@@ -708,16 +708,16 @@ l_int32    threshold;
 /*!
  * \brief   pixCorrelationScoreSimple()
  *
- * \param[in]    pix1   test pix, 1 bpp
- * \param[in]    pix2   exemplar pix, 1 bpp
- * \param[in]    area1  number of on pixels in pix1
- * \param[in]    area2  number of on pixels in pix2
- * \param[in]    delx   x comp of centroid difference
- * \param[in]    dely   y comp of centroid difference
- * \param[in]    maxdiffw max width difference of pix1 and pix2
- * \param[in]    maxdiffh max height difference of pix1 and pix2
- * \param[in]    tab    sum tab for byte
- * \param[out]   pscore correlation score, in range [0.0 ... 1.0]
+ * \param[in]    pix1       test pix, 1 bpp
+ * \param[in]    pix2       exemplar pix, 1 bpp
+ * \param[in]    area1      number of on pixels in pix1
+ * \param[in]    area2      number of on pixels in pix2
+ * \param[in]    delx       x comp of centroid difference
+ * \param[in]    dely       y comp of centroid difference
+ * \param[in]    maxdiffw   max width difference of pix1 and pix2
+ * \param[in]    maxdiffh   max height difference of pix1 and pix2
+ * \param[in]    tab        sum tab for byte
+ * \param[out]   pscore     correlation score, in range [0.0 ... 1.0]
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -728,7 +728,7 @@ l_int32    threshold;
  *          exceed %maxdiffw or %maxdiffh.
  * </pre>
  */
-l_int32
+l_ok
 pixCorrelationScoreSimple(PIX        *pix1,
                           PIX        *pix2,
                           l_int32     area1,
@@ -801,14 +801,14 @@ PIX     *pixt;
 /*!
  * \brief   pixCorrelationScoreShifted()
  *
- * \param[in]    pix1   1 bpp
- * \param[in]    pix2   1 bpp
- * \param[in]    area1  number of on pixels in pix1
- * \param[in]    area2  number of on pixels in pix2
- * \param[in]    delx x translation of pix2 relative to pix1
- * \param[in]    dely y translation of pix2 relative to pix1
- * \param[in]    tab    sum tab for byte
- * \param[out]   pscore correlation score
+ * \param[in]    pix1     1 bpp
+ * \param[in]    pix2     1 bpp
+ * \param[in]    area1    number of on pixels in pix1
+ * \param[in]    area2    number of on pixels in pix2
+ * \param[in]    delx x   translation of pix2 relative to pix1
+ * \param[in]    dely y   translation of pix2 relative to pix1
+ * \param[in]    tab      sum tab for byte
+ * \param[out]   pscore   correlation score
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -831,7 +831,7 @@ PIX     *pixt;
  *          be comparable.
  * </pre>
  */
-l_int32
+l_ok
 pixCorrelationScoreShifted(PIX        *pix1,
                            PIX        *pix2,
                            l_int32     area1,

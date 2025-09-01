@@ -276,9 +276,12 @@ Configuration File Format
 
    This element contains a directory name which will be scanned for font
    files to include in the set of available fonts. If 'prefix' is set to
-   "xdg", the value in the XDG_DATA_HOME environment variable will be added
-   as the path prefix. please see XDG Base Directory Specification for more
-   details.
+   "default" or "cwd", the current working directory will be added as the
+   path prefix prior to the value. If 'prefix' is set to "xdg", the value in
+   the XDG_DATA_HOME environment variable will be added as the path prefix.
+   please see XDG Base Directory Specification for more details. If 'prefix'
+   is set to "relative", the path of current file will be added prior to the
+   value.
 
   <cachedir prefix="default">
 
@@ -313,6 +316,13 @@ Configuration File Format
    This element provides a place to consolidate additional configuration
    information. <config> can contain <blank> and <rescan> elements in any
    order.
+
+  <description domain="fontconfig-conf">
+
+   This element is supposed to hold strings which describe what a config is
+   used for. This string can be translated through gettext. 'domain' needs to
+   be set the proper name to apply then. fontconfig will tries to retrieve
+   translations with 'domain' from gettext.
 
   <blank>
 
@@ -802,11 +812,11 @@ See Also
 
 Version
 
-   Fontconfig version 2.13.1
+   Fontconfig version 2.13.92
 
 References
 
    Visible links
-   1. file:///tmp/html-cm5uzN#DEBUG
-   2. file:///tmp/html-cm5uzN#DEBUG
+   1. file:///tmp/html-BrHZAp#DEBUG
+   2. file:///tmp/html-BrHZAp#DEBUG
    3. https://reproducible-builds.org/specs/source-date-epoch/

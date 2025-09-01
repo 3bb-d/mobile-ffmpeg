@@ -34,7 +34,6 @@ class Packages {
 
     static {
         supportedExternalLibraries = new ArrayList<>();
-        supportedExternalLibraries.add("chromaprint");
         supportedExternalLibraries.add("fontconfig");
         supportedExternalLibraries.add("freetype");
         supportedExternalLibraries.add("fribidi");
@@ -53,9 +52,11 @@ class Packages {
         supportedExternalLibraries.add("libwebp");
         supportedExternalLibraries.add("libxml2");
         supportedExternalLibraries.add("opencore-amr");
+        supportedExternalLibraries.add("openh264");
         supportedExternalLibraries.add("opus");
+        supportedExternalLibraries.add("rubberband");
+        supportedExternalLibraries.add("sdl2");
         supportedExternalLibraries.add("shine");
-        supportedExternalLibraries.add("sdl");
         supportedExternalLibraries.add("snappy");
         supportedExternalLibraries.add("soxr");
         supportedExternalLibraries.add("speex");
@@ -73,7 +74,7 @@ class Packages {
      * @return enabled external libraries
      */
     static List<String> getExternalLibraries() {
-        final String buildConfiguration = Config.getNativeBuildConf();
+        final String buildConfiguration = AbiDetect.getNativeBuildConf();
 
         final List<String> enabledLibraryList = new ArrayList<>();
         for (String supportedExternalLibrary : supportedExternalLibraries) {
@@ -100,7 +101,6 @@ class Packages {
         final boolean gnutls = externalLibraryList.contains("gnutls");
         final boolean xvid = externalLibraryList.contains("xvid");
 
-        boolean min = false;
         boolean minGpl = false;
         boolean https = false;
         boolean httpsGpl = false;
@@ -128,14 +128,11 @@ class Packages {
         } else {
             if (gnutls) {
                 https = true;
-            } else {
-                min = true;
             }
         }
 
         if (fullGpl) {
-            if (externalLibraryList.contains("chromaprint") &&
-                    externalLibraryList.contains("fontconfig") &&
+            if (externalLibraryList.contains("fontconfig") &&
                     externalLibraryList.contains("freetype") &&
                     externalLibraryList.contains("fribidi") &&
                     externalLibraryList.contains("gmp") &&
@@ -155,11 +152,9 @@ class Packages {
                     externalLibraryList.contains("opencore-amr") &&
                     externalLibraryList.contains("opus") &&
                     externalLibraryList.contains("shine") &&
-                    externalLibraryList.contains("sdl") &&
                     externalLibraryList.contains("snappy") &&
                     externalLibraryList.contains("soxr") &&
                     externalLibraryList.contains("speex") &&
-                    externalLibraryList.contains("tesseract") &&
                     externalLibraryList.contains("twolame") &&
                     externalLibraryList.contains("wavpack") &&
                     externalLibraryList.contains("x264") &&
@@ -172,8 +167,7 @@ class Packages {
         }
 
         if (full) {
-            if (externalLibraryList.contains("chromaprint") &&
-                    externalLibraryList.contains("fontconfig") &&
+            if (externalLibraryList.contains("fontconfig") &&
                     externalLibraryList.contains("freetype") &&
                     externalLibraryList.contains("fribidi") &&
                     externalLibraryList.contains("gmp") &&
@@ -192,11 +186,9 @@ class Packages {
                     externalLibraryList.contains("opencore-amr") &&
                     externalLibraryList.contains("opus") &&
                     externalLibraryList.contains("shine") &&
-                    externalLibraryList.contains("sdl") &&
                     externalLibraryList.contains("snappy") &&
                     externalLibraryList.contains("soxr") &&
                     externalLibraryList.contains("speex") &&
-                    externalLibraryList.contains("tesseract") &&
                     externalLibraryList.contains("twolame") &&
                     externalLibraryList.contains("wavpack")) {
                 return "full";
@@ -273,7 +265,11 @@ class Packages {
             }
         }
 
-        return "min";
+        if (externalLibraryList.size() == 0) {
+            return "min";
+        } else {
+            return "custom";
+        }
     }
 
 }

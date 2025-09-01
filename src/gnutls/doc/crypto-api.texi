@@ -8,13 +8,13 @@
 
 @var{nonce_len}: The length of the nonce
 
-@var{auth}: the data to be authenticated
+@var{auth}: additional data to be authenticated
 
 @var{auth_len}: The length of the data
 
 @var{tag_size}: The size of the tag to use (use zero for the default)
 
-@var{ctext}: the data to decrypt
+@var{ctext}: the data to decrypt (including the authentication tag)
 
 @var{ctext_len}: the length of data to decrypt (includes tag size)
 
@@ -23,13 +23,44 @@
 @var{ptext_len}: the length of decrypted data (initially must hold the maximum available size)
 
 This function will decrypt the given data using the algorithm
-specified by the context. This function must be provided the whole
-data to be decrypted, including the tag, and will fail if the tag
-verification fails.
+specified by the context. This function must be provided the complete
+data to be decrypted, including the authentication tag. On several
+AEAD ciphers, the authentication tag is appended to the ciphertext,
+though this is not a general rule. This function will fail if
+the tag verification fails.
+
+@strong{Returns:} Zero or a negative error code on verification failure or other error.
+
+@strong{Since:} 3.4.0
+@end deftypefun
+
+@subheading gnutls_aead_cipher_decryptv2
+@anchor{gnutls_aead_cipher_decryptv2}
+@deftypefun {int} {gnutls_aead_cipher_decryptv2} (gnutls_aead_cipher_hd_t @var{handle}, const void * @var{nonce}, size_t @var{nonce_len}, const giovec_t * @var{auth_iov}, int @var{auth_iovcnt}, const giovec_t * @var{iov}, int @var{iovcnt}, void * @var{tag}, size_t @var{tag_size})
+@var{handle}: is a @code{gnutls_aead_cipher_hd_t}  type.
+
+@var{nonce}: the nonce to set
+
+@var{nonce_len}: The length of the nonce
+
+@var{auth_iov}: additional data to be authenticated
+
+@var{auth_iovcnt}: The number of buffers in  @code{auth_iov} 
+
+@var{iov}: the data to decrypt
+
+@var{iovcnt}: The number of buffers in  @code{iov} 
+
+@var{tag}: The authentication tag
+
+@var{tag_size}: The size of the tag to use (use zero for the default)
+
+This is similar to @code{gnutls_aead_cipher_decrypt()} , but it performs
+in-place encryption on the provided data buffers.
 
 @strong{Returns:} Zero or a negative error code on error.
 
-@strong{Since:} 3.4.0
+@strong{Since:} 3.6.10
 @end deftypefun
 
 @subheading gnutls_aead_cipher_deinit
@@ -52,7 +83,7 @@ authenticated-encryption context.
 
 @var{nonce_len}: The length of the nonce
 
-@var{auth}: the data to be authenticated
+@var{auth}: additional data to be authenticated
 
 @var{auth_len}: The length of the data
 
@@ -62,7 +93,7 @@ authenticated-encryption context.
 
 @var{ptext_len}: The length of data to encrypt
 
-@var{ctext}: the encrypted data
+@var{ctext}: the encrypted data including authentication tag
 
 @var{ctext_len}: the length of encrypted data (initially must hold the maximum available size, including space for tag)
 
@@ -73,6 +104,67 @@ authentication tag.
 @strong{Returns:} Zero or a negative error code on error.
 
 @strong{Since:} 3.4.0
+@end deftypefun
+
+@subheading gnutls_aead_cipher_encryptv
+@anchor{gnutls_aead_cipher_encryptv}
+@deftypefun {int} {gnutls_aead_cipher_encryptv} (gnutls_aead_cipher_hd_t @var{handle}, const void * @var{nonce}, size_t @var{nonce_len}, const giovec_t * @var{auth_iov}, int @var{auth_iovcnt}, size_t @var{tag_size}, const giovec_t * @var{iov}, int @var{iovcnt}, void * @var{ctext}, size_t * @var{ctext_len})
+@var{handle}: is a @code{gnutls_aead_cipher_hd_t}  type.
+
+@var{nonce}: the nonce to set
+
+@var{nonce_len}: The length of the nonce
+
+@var{auth_iov}: additional data to be authenticated
+
+@var{auth_iovcnt}: The number of buffers in  @code{auth_iov} 
+
+@var{tag_size}: The size of the tag to use (use zero for the default)
+
+@var{iov}: the data to be encrypted
+
+@var{iovcnt}: The number of buffers in  @code{iov} 
+
+@var{ctext}: the encrypted data including authentication tag
+
+@var{ctext_len}: the length of encrypted data (initially must hold the maximum available size, including space for tag)
+
+This function will encrypt the provided data buffers using the algorithm
+specified by the context. The output data will contain the
+authentication tag.
+
+@strong{Returns:} Zero or a negative error code on error.
+
+@strong{Since:} 3.6.3
+@end deftypefun
+
+@subheading gnutls_aead_cipher_encryptv2
+@anchor{gnutls_aead_cipher_encryptv2}
+@deftypefun {int} {gnutls_aead_cipher_encryptv2} (gnutls_aead_cipher_hd_t @var{handle}, const void * @var{nonce}, size_t @var{nonce_len}, const giovec_t * @var{auth_iov}, int @var{auth_iovcnt}, const giovec_t * @var{iov}, int @var{iovcnt}, void * @var{tag}, size_t * @var{tag_size})
+@var{handle}: is a @code{gnutls_aead_cipher_hd_t}  type.
+
+@var{nonce}: the nonce to set
+
+@var{nonce_len}: The length of the nonce
+
+@var{auth_iov}: additional data to be authenticated
+
+@var{auth_iovcnt}: The number of buffers in  @code{auth_iov} 
+
+@var{iov}: the data to be encrypted
+
+@var{iovcnt}: The number of buffers in  @code{iov} 
+
+@var{tag}: The authentication tag
+
+@var{tag_size}: The size of the tag to use (use zero for the default)
+
+This is similar to @code{gnutls_aead_cipher_encrypt()} , but it performs
+in-place encryption on the provided data buffers.
+
+@strong{Returns:} Zero or a negative error code on error.
+
+@strong{Since:} 3.6.10
 @end deftypefun
 
 @subheading gnutls_aead_cipher_init
@@ -226,7 +318,9 @@ data length will equal the plaintext size.
 @deftypefun {unsigned} {gnutls_cipher_get_iv_size} (gnutls_cipher_algorithm_t @var{algorithm})
 @var{algorithm}: is an encryption algorithm
 
-Get block size for encryption algorithm.
+This function returns the size of the initialization vector (IV) for the
+provided algorithm. For algorithms with variable size IV (e.g., AES-CCM),
+the returned size will be the one used by TLS.
 
 @strong{Returns:} block size for encryption algorithm.
 
@@ -238,6 +332,8 @@ Get block size for encryption algorithm.
 @deftypefun {unsigned} {gnutls_cipher_get_tag_size} (gnutls_cipher_algorithm_t @var{algorithm})
 @var{algorithm}: is an encryption algorithm
 
+This function returns the tag size of an authenticated encryption
+algorithm. For non-AEAD algorithms, it returns zero.
 
 @strong{Returns:} the tag size of the authenticated encryption algorithm.
 
@@ -449,6 +545,51 @@ an error code is returned.
 @strong{Since:} 3.5.0
 @end deftypefun
 
+@subheading gnutls_decode_gost_rs_value
+@anchor{gnutls_decode_gost_rs_value}
+@deftypefun {int} {gnutls_decode_gost_rs_value} (const gnutls_datum_t * @var{sig_value}, gnutls_datum_t * @var{r}, gnutls_datum_t * @var{s})
+@var{sig_value}: will holds a GOST signature according to RFC 4491 section 2.2.2
+
+@var{r}: will contain the r value
+
+@var{s}: will contain the s value
+
+This function will decode the provided  @code{sig_value} , into  @code{r} and  @code{s} elements.
+See RFC 4491 section 2.2.2 for the format of signature value.
+
+The output values may be padded with a zero byte to prevent them
+from being interpreted as negative values. The value
+should be deallocated using @code{gnutls_free()} .
+
+@strong{Returns:} On success, @code{GNUTLS_E_SUCCESS}  (0) is returned, otherwise
+an error code is returned.
+
+@strong{Since:} 3.6.0
+@end deftypefun
+
+@subheading gnutls_decode_rs_value
+@anchor{gnutls_decode_rs_value}
+@deftypefun {int} {gnutls_decode_rs_value} (const gnutls_datum_t * @var{sig_value}, gnutls_datum_t * @var{r}, gnutls_datum_t * @var{s})
+@var{sig_value}: holds a Dss-Sig-Value DER or BER encoded structure
+
+@var{r}: will contain the r value
+
+@var{s}: will contain the s value
+
+This function will decode the provided  @code{sig_value} , 
+into  @code{r} and  @code{s} elements. The Dss-Sig-Value is used for DSA and ECDSA
+signatures.
+
+The output values may be padded with a zero byte to prevent them
+from being interpreted as negative values. The value
+should be deallocated using @code{gnutls_free()} .
+
+@strong{Returns:} On success, @code{GNUTLS_E_SUCCESS}  (0) is returned, otherwise
+an error code is returned.
+
+@strong{Since:} 3.6.0
+@end deftypefun
+
 @subheading gnutls_encode_ber_digest_info
 @anchor{gnutls_encode_ber_digest_info}
 @deftypefun {int} {gnutls_encode_ber_digest_info} (gnutls_digest_algorithm_t @var{hash}, const gnutls_datum_t * @var{digest}, gnutls_datum_t * @var{output})
@@ -467,6 +608,48 @@ an error code is returned.
 @strong{Since:} 3.5.0
 @end deftypefun
 
+@subheading gnutls_encode_gost_rs_value
+@anchor{gnutls_encode_gost_rs_value}
+@deftypefun {int} {gnutls_encode_gost_rs_value} (gnutls_datum_t * @var{sig_value}, const gnutls_datum_t * @var{r}, const gnutls_datum_t  * @var{s})
+@var{sig_value}: will hold a GOST signature according to RFC 4491 section 2.2.2
+
+@var{r}: must contain the r value
+
+@var{s}: must contain the s value
+
+This function will encode the provided r and s values, into binary
+representation according to RFC 4491 section 2.2.2, used for GOST R
+34.10-2001 (and thus also for GOST R 34.10-2012) signatures.
+
+The output value should be deallocated using @code{gnutls_free()} .
+
+@strong{Returns:} On success, @code{GNUTLS_E_SUCCESS}  (0) is returned, otherwise
+an error code is returned.
+
+@strong{Since:} 3.6.0
+@end deftypefun
+
+@subheading gnutls_encode_rs_value
+@anchor{gnutls_encode_rs_value}
+@deftypefun {int} {gnutls_encode_rs_value} (gnutls_datum_t * @var{sig_value}, const gnutls_datum_t * @var{r}, const gnutls_datum_t * @var{s})
+@var{sig_value}: will hold a Dss-Sig-Value DER encoded structure
+
+@var{r}: must contain the r value
+
+@var{s}: must contain the s value
+
+This function will encode the provided r and s values, 
+into a Dss-Sig-Value structure, used for DSA and ECDSA
+signatures.
+
+The output value should be deallocated using @code{gnutls_free()} .
+
+@strong{Returns:} On success, @code{GNUTLS_E_SUCCESS}  (0) is returned, otherwise
+an error code is returned.
+
+@strong{Since:} 3.6.0
+@end deftypefun
+
 @subheading gnutls_hash
 @anchor{gnutls_hash}
 @deftypefun {int} {gnutls_hash} (gnutls_hash_hd_t @var{handle}, const void * @var{ptext}, size_t @var{ptext_len})
@@ -482,6 +665,21 @@ specified by the context.
 @strong{Returns:} Zero or a negative error code on error.
 
 @strong{Since:} 2.10.0
+@end deftypefun
+
+@subheading gnutls_hash_copy
+@anchor{gnutls_hash_copy}
+@deftypefun {gnutls_hash_hd_t} {gnutls_hash_copy} (gnutls_hash_hd_t @var{handle})
+@var{handle}: is a @code{gnutls_hash_hd_t}  type
+
+This function will create a copy of Message Digest context, containing all
+its current state. Copying contexts for Message Digests registered using
+@code{gnutls_crypto_register_digest()}  is not supported and will always result in
+an error.
+
+@strong{Returns:} new Message Digest context or NULL in case of an error.
+
+@strong{Since:} 3.6.9
 @end deftypefun
 
 @subheading gnutls_hash_deinit
@@ -559,6 +757,47 @@ and reset the state of the hash.
 @strong{Since:} 2.10.0
 @end deftypefun
 
+@subheading gnutls_hkdf_expand
+@anchor{gnutls_hkdf_expand}
+@deftypefun {int} {gnutls_hkdf_expand} (gnutls_mac_algorithm_t @var{mac}, const gnutls_datum_t * @var{key}, const gnutls_datum_t * @var{info}, void * @var{output}, size_t @var{length})
+@var{mac}: the mac algorithm used internally
+
+@var{key}: the pseudorandom key created with HKDF-Extract
+
+@var{info}: the optional informational data
+
+@var{output}: the output value of the expand operation
+
+@var{length}: the desired length of the output key
+
+This function will derive a variable length keying material from
+the pseudorandom key using the HKDF-Expand function as defined in
+RFC 5869.
+
+@strong{Returns:} Zero or a negative error code on error.
+
+@strong{Since:} 3.6.13
+@end deftypefun
+
+@subheading gnutls_hkdf_extract
+@anchor{gnutls_hkdf_extract}
+@deftypefun {int} {gnutls_hkdf_extract} (gnutls_mac_algorithm_t @var{mac}, const gnutls_datum_t * @var{key}, const gnutls_datum_t * @var{salt}, void * @var{output})
+@var{mac}: the mac algorithm used internally
+
+@var{key}: the initial keying material
+
+@var{salt}: the optional salt
+
+@var{output}: the output value of the extract operation
+
+This function will derive a fixed-size key using the HKDF-Extract
+function as defined in RFC 5869.
+
+@strong{Returns:} Zero or a negative error code on error.
+
+@strong{Since:} 3.6.13
+@end deftypefun
+
 @subheading gnutls_hmac
 @anchor{gnutls_hmac}
 @deftypefun {int} {gnutls_hmac} (gnutls_hmac_hd_t @var{handle}, const void * @var{ptext}, size_t @var{ptext_len})
@@ -574,6 +813,21 @@ specified by the context.
 @strong{Returns:} Zero or a negative error code on error.
 
 @strong{Since:} 2.10.0
+@end deftypefun
+
+@subheading gnutls_hmac_copy
+@anchor{gnutls_hmac_copy}
+@deftypefun {gnutls_hmac_hd_t} {gnutls_hmac_copy} (gnutls_hmac_hd_t @var{handle})
+@var{handle}: is a @code{gnutls_hmac_hd_t}  type
+
+This function will create a copy of MAC context, containing all its current
+state. Copying contexts for MACs registered using
+@code{gnutls_crypto_register_mac()}  is not supported and will always result in an
+error.
+
+@strong{Returns:} new MAC context or NULL in case of an error.
+
+@strong{Since:} 3.6.9
 @end deftypefun
 
 @subheading gnutls_hmac_deinit
@@ -605,11 +859,26 @@ the given hmac context.
 @var{digest}: is the output value of the hash
 
 This convenience function will hash the given data and return output
-on a single call.
+on a single call. Note, this call will not work for MAC algorithms
+that require nonce (like UMAC or GMAC).
 
 @strong{Returns:} Zero or a negative error code on error.
 
 @strong{Since:} 2.10.0
+@end deftypefun
+
+@subheading gnutls_hmac_get_key_size
+@anchor{gnutls_hmac_get_key_size}
+@deftypefun {unsigned} {gnutls_hmac_get_key_size} (gnutls_mac_algorithm_t @var{algorithm})
+@var{algorithm}: the mac algorithm to use
+
+This function will return the size of the key to be used with this
+algorithm. On the algorithms which may accept arbitrary key sizes,
+the returned size is the MAC key size used in the TLS protocol.
+
+@strong{Returns:} The key size or zero on error.
+
+@strong{Since:} 3.6.12
 @end deftypefun
 
 @subheading gnutls_hmac_get_len
@@ -686,6 +955,29 @@ Returns the size of the nonce used by the MAC in TLS.
 @strong{Returns:} length (in bytes) of the given MAC nonce size, or 0.
 
 @strong{Since:} 3.2.0
+@end deftypefun
+
+@subheading gnutls_pbkdf2
+@anchor{gnutls_pbkdf2}
+@deftypefun {int} {gnutls_pbkdf2} (gnutls_mac_algorithm_t @var{mac}, const gnutls_datum_t * @var{key}, const gnutls_datum_t * @var{salt}, unsigned @var{iter_count}, void * @var{output}, size_t @var{length})
+@var{mac}: the mac algorithm used internally
+
+@var{key}: the initial keying material
+
+@var{salt}: the salt
+
+@var{iter_count}: the iteration count
+
+@var{output}: the output value
+
+@var{length}: the desired length of the output key
+
+This function will derive a variable length keying material from
+a password according to PKCS @code{5}  PBKDF2.
+
+@strong{Returns:} Zero or a negative error code on error.
+
+@strong{Since:} 3.6.13
 @end deftypefun
 
 @subheading gnutls_rnd

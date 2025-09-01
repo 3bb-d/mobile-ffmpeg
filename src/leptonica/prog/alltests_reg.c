@@ -64,6 +64,10 @@ static const char *tests[] = {
                               "blend4_reg",
                               "blend5_reg",
                               "boxa1_reg",
+                              "boxa2_reg",
+                              "boxa3_reg",
+                              "boxa4_reg",
+                              "bytea_reg",
                               "ccthin1_reg",
                               "ccthin2_reg",
                               "cmapquant_reg",
@@ -91,6 +95,7 @@ static const char *tests[] = {
                               "expand_reg",
                               "extrema_reg",
                               "falsecolor_reg",
+                              "fhmtauto_reg",
                          /*   "files_reg",  */
                               "findcorners_reg",
                               "findpattern_reg",
@@ -107,6 +112,7 @@ static const char *tests[] = {
                               "hardlight_reg",
                               "insert_reg",
                               "ioformats_reg",
+                              "iomisc_reg",
                               "italic_reg",
                               "jbclass_reg",
 #if HAVE_LIBJP2K
@@ -118,9 +124,12 @@ static const char *tests[] = {
                               "lineremoval_reg",
                               "locminmax_reg",
                               "logicops_reg",
+                              "lowaccess_reg",
                               "maze_reg",
                               "mtiff_reg",
                               "multitype_reg",
+                              "numa1_reg",
+                              "numa2_reg",
                               "nearline_reg",
                               "newspaper_reg",
                               "overlap_reg",
@@ -131,6 +140,7 @@ static const char *tests[] = {
                               "pixa2_reg",
                               "pixadisp_reg",
                               "pixcomp_reg",
+                              "pixmem_reg",
                               "pixserial_reg",
                               "pngio_reg",
                               "pnmio_reg",
@@ -139,10 +149,13 @@ static const char *tests[] = {
                               "psio_reg",
                               "psioseg_reg",
                               "pta_reg",
+                              "ptra1_reg",
+                              "ptra2_reg",
                               "quadtree_reg",
                               "rank_reg",
                               "rankbin_reg",
                               "rankhisto_reg",
+                              "rasterop_reg",
                               "rasteropip_reg",
                               "rotate1_reg",
                               "rotate2_reg",
@@ -155,6 +168,7 @@ static const char *tests[] = {
                               "skew_reg",
                               "speckle_reg",
                               "splitcomp_reg",
+                              "string_reg",
                               "subpixel_reg",
                               "texturefill_reg",
                               "threshnorm_reg",
@@ -190,7 +204,7 @@ static char  mainName[] = "alltests_reg";
     l_getCurrentTime(&start, NULL);
     ntests = sizeof(tests) / sizeof(char *);
     fprintf(stderr, "Running alltests_reg:\n"
-            "This currently tests %d of the 127 regression test\n"
+            "This currently tests %d of the 128 regression test\n"
             "programs in the /prog directory.\n", ntests);
 
         /* Clear the output file if we're doing the set of reg tests */
@@ -198,7 +212,7 @@ static char  mainName[] = "alltests_reg";
     if (dotest) {
         results_file = genPathname("/tmp/lept", "reg_results.txt");
         sa = sarrayCreate(3);
-        sarrayAddString(sa, (char *)header, L_COPY);
+        sarrayAddString(sa, header, L_COPY);
         sarrayAddString(sa, getLeptonicaVersion(), L_INSERT);
         sarrayAddString(sa, getImagelibVersions(), L_INSERT);
         str = sarrayToString(sa, 1);
