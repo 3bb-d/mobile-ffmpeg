@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 Red Hat
+ * Copyright (C) 2013-2017 Red Hat
  *
  * This file is part of GnuTLS.
  *
@@ -14,7 +14,7 @@
  * GNU Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this program; if not, see <http://www.gnu.org/licenses/>.
+ * License along with this program; if not, see <https://www.gnu.org/licenses/>.
  */
 
 #include <config.h>
@@ -27,33 +27,28 @@
 
 #include "gnutls_int.h"
 #include "errors.h"
-#include <nettle/aes.h>
-#include <nettle/memxor.h>
-#include <locks.h>
+#include <nettle/sha2.h>
 #include <atfork.h>
 #include <rnd-common.h>
 
+/* The block size is chosen arbitrarily */
+#define ENTROPY_BLOCK_SIZE SHA256_DIGEST_SIZE
+
 /* This provides a random generator for gnutls. It uses
- * three instances of the DRBG-AES-CTR generator, one for
- * each level of randomness. It uses /dev/urandom for their
- * seeding.
+ * two instances of the DRBG-AES-CTR generator, one for
+ * nonce level and another for the other levels of randomness.
  */
-
-#define RND_LOCK if (gnutls_mutex_lock(&rnd_mutex)!=0) abort()
-#define RND_UNLOCK if (gnutls_mutex_unlock(&rnd_mutex)!=0) abort()
-
-static void *rnd_mutex;
-
 struct fips_ctx {
 	struct drbg_aes_ctx nonce_context;
 	struct drbg_aes_ctx normal_context;
-	struct drbg_aes_ctx strong_context;
 	unsigned int forkid;
+	uint8_t entropy_hash[SHA256_DIGEST_SIZE];
 };
 
 static int _rngfips_ctx_reinit(struct fips_ctx *fctx);
 static int _rngfips_ctx_init(struct fips_ctx *fctx);
-static int drbg_reseed(struct drbg_aes_ctx *ctx);
+static int drbg_reseed(struct fips_ctx *fctx, struct drbg_aes_ctx *ctx);
+static int get_entropy(struct fips_ctx *fctx, uint8_t *buffer, size_t length);
 
 static int get_random(struct drbg_aes_ctx *ctx, struct fips_ctx *fctx,
 		      void *buffer, size_t length)
@@ -67,7 +62,7 @@ static int get_random(struct drbg_aes_ctx *ctx, struct fips_ctx *fctx,
 	}
 
 	if (ctx->reseed_counter > DRBG_AES_RESEED_TIME) {
-		ret = drbg_reseed(ctx);
+		ret = drbg_reseed(fctx, ctx);
 		if (ret < 0)
 			return gnutls_assert_val(ret);
 	}
@@ -79,59 +74,111 @@ static int get_random(struct drbg_aes_ctx *ctx, struct fips_ctx *fctx,
 	return 0;
 }
 
-#define PSTRING "gnutls-rng"
-#define PSTRING_SIZE (sizeof(PSTRING)-1)
-static int drbg_init(struct drbg_aes_ctx *ctx)
+static int get_entropy(struct fips_ctx *fctx, uint8_t *buffer, size_t length)
 {
-	uint8_t buffer[DRBG_AES_SEED_SIZE];
 	int ret;
+	uint8_t block[ENTROPY_BLOCK_SIZE];
+	uint8_t hash[SHA256_DIGEST_SIZE];
+	struct sha256_ctx ctx;
+	size_t total = 0;
 
-	/* Get a key from the standard RNG or from the entropy source.  */
-	ret = _rnd_get_system_entropy(buffer, sizeof(buffer));
-	if (ret < 0)
-		return gnutls_assert_val(ret);
+	/* For FIPS 140-2 4.9.2 continuous random number generator
+	 * test, iteratively fetch fixed sized block from the system
+	 * RNG and compare consecutive blocks.
+	 *
+	 * Note that we store the hash of the entropy block rather
+	 * than the block itself for backward secrecy.
+	 */
+	while (total < length) {
+		ret = _rnd_get_system_entropy(block, ENTROPY_BLOCK_SIZE);
+		if (ret < 0)
+			return gnutls_assert_val(ret);
 
-	ret = drbg_aes_init(ctx, sizeof(buffer), buffer, PSTRING_SIZE, (void*)PSTRING);
-	if (ret == 0)
-		return gnutls_assert_val(GNUTLS_E_RANDOM_FAILED);
+		sha256_init(&ctx);
+		sha256_update(&ctx, sizeof(block), block);
+		sha256_digest(&ctx, sizeof(hash), hash);
 
-	zeroize_key(buffer, sizeof(buffer));
+		if (memcmp(hash, fctx->entropy_hash, sizeof(hash)) == 0) {
+			_gnutls_switch_lib_state(LIB_STATE_ERROR);
+			return gnutls_assert_val(GNUTLS_E_RANDOM_FAILED);
+		}
+		memcpy(fctx->entropy_hash, hash, sizeof(hash));
+
+		memcpy(buffer, block, MIN(length - total, sizeof(block)));
+		total += sizeof(block);
+		buffer += sizeof(block);
+	}
+	zeroize_key(block, sizeof(block));
 
 	return 0;
 }
 
-/* Reseed a generator. */
-static int drbg_reseed(struct drbg_aes_ctx *ctx)
+#define PSTRING "gnutls-rng"
+#define PSTRING_SIZE (sizeof(PSTRING)-1)
+static int drbg_init(struct fips_ctx *fctx, struct drbg_aes_ctx *ctx)
 {
 	uint8_t buffer[DRBG_AES_SEED_SIZE];
 	int ret;
 
-	/* The other two generators are seeded from /dev/random.  */
-	ret = _rnd_get_system_entropy(buffer, sizeof(buffer));
+	ret = get_entropy(fctx, buffer, sizeof(buffer));
 	if (ret < 0)
 		return gnutls_assert_val(ret);
 
-	drbg_aes_reseed(ctx, sizeof(buffer), buffer, 0, NULL);
+	ret = drbg_aes_init(ctx, sizeof(buffer), buffer,
+			    PSTRING_SIZE, (void*)PSTRING);
+	zeroize_key(buffer, sizeof(buffer));
+	if (ret == 0)
+		return gnutls_assert_val(GNUTLS_E_RANDOM_FAILED);
 
-	return 0;
+	return GNUTLS_E_SUCCESS;
+}
+
+/* Reseed a generator. */
+static int drbg_reseed(struct fips_ctx *fctx, struct drbg_aes_ctx *ctx)
+{
+	uint8_t buffer[DRBG_AES_SEED_SIZE];
+	int ret;
+
+	ret = get_entropy(fctx, buffer, sizeof(buffer));
+	if (ret < 0)
+		return gnutls_assert_val(ret);
+
+	ret = drbg_aes_reseed(ctx, sizeof(buffer), buffer, 0, NULL);
+	zeroize_key(buffer, sizeof(buffer));
+	if (ret == 0)
+		return gnutls_assert_val(GNUTLS_E_RANDOM_FAILED);
+
+	return GNUTLS_E_SUCCESS;
 }
 
 static int _rngfips_ctx_init(struct fips_ctx *fctx)
 {
+	uint8_t block[ENTROPY_BLOCK_SIZE];
+	struct sha256_ctx ctx;
 	int ret;
 
-	/* strong */
-	ret = drbg_init(&fctx->strong_context);
+	/* For FIPS 140-2 4.9.2 continuous random number generator
+	 * test, get the initial entropy from the system RNG and keep
+	 * it for comparison.
+	 *
+	 * Note that we store the hash of the entropy block rather
+	 * than the block itself for backward secrecy.
+	 */
+	ret = _rnd_get_system_entropy(block, sizeof(block));
 	if (ret < 0)
 		return gnutls_assert_val(ret);
+	sha256_init(&ctx);
+	sha256_update(&ctx, sizeof(block), block);
+	zeroize_key(block, sizeof(block));
+	sha256_digest(&ctx, sizeof(fctx->entropy_hash), fctx->entropy_hash);
 
 	/* normal */
-	ret = drbg_init(&fctx->normal_context);
+	ret = drbg_init(fctx, &fctx->normal_context);
 	if (ret < 0)
 		return gnutls_assert_val(ret);
 
 	/* nonce */
-	ret = drbg_init(&fctx->nonce_context);
+	ret = drbg_init(fctx, &fctx->nonce_context);
 	if (ret < 0)
 		return gnutls_assert_val(ret);
 
@@ -144,18 +191,13 @@ static int _rngfips_ctx_reinit(struct fips_ctx *fctx)
 {
 	int ret;
 
-	/* strong */
-	ret = drbg_reseed(&fctx->strong_context);
-	if (ret < 0)
-		return gnutls_assert_val(ret);
-
 	/* normal */
-	ret = drbg_reseed(&fctx->normal_context);
+	ret = drbg_reseed(fctx, &fctx->normal_context);
 	if (ret < 0)
 		return gnutls_assert_val(ret);
 
 	/* nonce */
-	ret = drbg_reseed(&fctx->nonce_context);
+	ret = drbg_reseed(fctx, &fctx->nonce_context);
 	if (ret < 0)
 		return gnutls_assert_val(ret);
 
@@ -167,7 +209,7 @@ static int _rngfips_ctx_reinit(struct fips_ctx *fctx)
 /* Initialize this random subsystem. */
 static int _rngfips_init(void **_ctx)
 {
-/* Basic initialization is required to initialize mutexes and
+/* Basic initialization is required to
    do a few checks on the implementation.  */
 	struct fips_ctx *ctx;
 	int ret;
@@ -176,13 +218,11 @@ static int _rngfips_init(void **_ctx)
 	if (ctx == NULL)
 		return gnutls_assert_val(GNUTLS_E_MEMORY_ERROR);
 
-	ret = gnutls_mutex_init(&rnd_mutex);
-	if (ret < 0)
-		return gnutls_assert_val(ret);
-
 	ret = _rngfips_ctx_init(ctx);
-	if (ret < 0)
+	if (ret < 0) {
+		gnutls_free(ctx);
 		return gnutls_assert_val(ret);
+	}
 
 	*_ctx = ctx;
 
@@ -194,19 +234,18 @@ static int _rngfips_rnd(void *_ctx, int level, void *buffer, size_t length)
 	struct fips_ctx *ctx = _ctx;
 	int ret;
 
-	RND_LOCK;
 	switch (level) {
 	case GNUTLS_RND_RANDOM:
-		ret = get_random(&ctx->normal_context, ctx, buffer, length);
-		break;
 	case GNUTLS_RND_KEY:
-		ret = get_random(&ctx->strong_context, ctx, buffer, length);
+		/* Unlike the chacha generator in rnd.c we do not need
+		 * to explicitly protect against backtracking in GNUTLS_RND_KEY
+		 * level. This protection is part of the DRBG generator. */
+		ret = get_random(&ctx->normal_context, ctx, buffer, length);
 		break;
 	default:
 		ret = get_random(&ctx->nonce_context, ctx, buffer, length);
 		break;
 	}
-	RND_UNLOCK;
 
 	return ret;
 }
@@ -214,9 +253,6 @@ static int _rngfips_rnd(void *_ctx, int level, void *buffer, size_t length)
 static void _rngfips_deinit(void *_ctx)
 {
 	struct fips_ctx *ctx = _ctx;
-
-	gnutls_mutex_deinit(&rnd_mutex);
-	rnd_mutex = NULL;
 
 	zeroize_key(ctx, sizeof(*ctx));
 	free(ctx);
@@ -232,9 +268,7 @@ static int selftest_kat(void)
 {
 	int ret;
 
-	RND_LOCK;
 	ret = drbg_aes_self_test();
-	RND_UNLOCK;
 
 	if (ret == 0) {
 		_gnutls_debug_log("DRBG-AES self test failed\n");

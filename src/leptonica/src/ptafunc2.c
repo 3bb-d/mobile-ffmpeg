@@ -28,6 +28,13 @@
  * \file  ptafunc2.c
  * <pre>
  *
+ *      --------------------------------------
+ *      This file has these Pta utilities:
+ *         - sorting
+ *         - ordered set operations
+ *         - hash map operations
+ *      --------------------------------------
+ *
  *      Sorting
  *           PTA        *ptaSort()
  *           l_int32     ptaGetSortIndex()
@@ -79,10 +86,10 @@
  * \brief   ptaSort()
  *
  * \param[in]    ptas
- * \param[in]    sorttype L_SORT_BY_X, L_SORT_BY_Y
- * \param[in]    sortorder  L_SORT_INCREASING, L_SORT_DECREASING
- * \param[out]   pnaindex [optional] index of sorted order into
- *                        original array
+ * \param[in]    sorttype    L_SORT_BY_X, L_SORT_BY_Y
+ * \param[in]    sortorder   L_SORT_INCREASING, L_SORT_DECREASING
+ * \param[out]   pnaindex    [optional] index of sorted order into
+ *                           original array
  * \return  ptad sorted version of ptas, or NULL on error
  */
 PTA *
@@ -122,13 +129,12 @@ NUMA  *naindex;
  * \brief   ptaGetSortIndex()
  *
  * \param[in]    ptas
- * \param[in]    sorttype L_SORT_BY_X, L_SORT_BY_Y
- * \param[in]    sortorder  L_SORT_INCREASING, L_SORT_DECREASING
- * \param[out]   pnaindex index of sorted order into
- *                        original array
+ * \param[in]    sorttype    L_SORT_BY_X, L_SORT_BY_Y
+ * \param[in]    sortorder   L_SORT_INCREASING, L_SORT_DECREASING
+ * \param[out]   pnaindex    index of sorted order into original array
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 ptaGetSortIndex(PTA     *ptas,
                 l_int32  sorttype,
                 l_int32  sortorder,
@@ -175,7 +181,7 @@ NUMA      *na;
  * \brief   ptaSortByIndex()
  *
  * \param[in]    ptas
- * \param[in]    naindex na that maps from the new pta to the input pta
+ * \param[in]    naindex    na that maps from the new pta to the input pta
  * \return  ptad sorted, or NULL on  error
  */
 PTA *
@@ -211,7 +217,7 @@ PTA       *ptad;
  * \brief   ptaaSortByIndex()
  *
  * \param[in]    ptaas
- * \param[in]    naindex na that maps from the new ptaa to the input ptaa
+ * \param[in]    naindex    na that maps from the new ptaa to the input ptaa
  * \return  ptaad sorted, or NULL on error
  */
 PTAA *
@@ -247,13 +253,13 @@ PTAA    *ptaad;
  * \brief   ptaGetRankValue()
  *
  * \param[in]    pta
- * \param[in]    fract    use 0.0 for smallest, 1.0 for largest
- * \param[in]    ptasort  [optional] version of %pta sorted by %sorttype
- * \param[in]    sorttype L_SORT_BY_X, L_SORT_BY_Y
- * \param[out]   pval     &rankval: the x or y value at %fract
+ * \param[in]    fract      use 0.0 for smallest, 1.0 for largest
+ * \param[in]    ptasort    [optional] version of %pta sorted by %sorttype
+ * \param[in]    sorttype   L_SORT_BY_X, L_SORT_BY_Y
+ * \param[out]   pval       rankval: the x or y value at %fract
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 ptaGetRankValue(PTA        *pta,
                 l_float32   fract,
                 PTA        *ptasort,
@@ -340,7 +346,7 @@ PTA  *pta3, *ptad;
 /*!
  * \brief   ptaRemoveDupsByAset()
  *
- * \param[in]    ptas assumed to be integer values
+ * \param[in]    ptas    assumed to be integer values
  * \return  ptad with duplicates removed, or NULL on error
  *
  * <pre>
@@ -516,9 +522,9 @@ PTA  *pta3, *ptad;
 /*!
  * \brief   ptaRemoveDupsByHash()
  *
- * \param[in]    ptas assumed to be integer values
- * \param[out]   pptad unique set of pts; duplicates removed
- * \param[out]   pdahash [optional] dnahash used for lookup
+ * \param[in]    ptas      assumed to be integer values
+ * \param[out]   pptad     unique set of pts; duplicates removed
+ * \param[out]   pdahash   [optional] dnahash used for lookup
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -539,7 +545,7 @@ PTA  *pta3, *ptad;
  *          lookup within the dna in each bucket.
  * </pre>
  */
-l_int32
+l_ok
 ptaRemoveDupsByHash(PTA         *ptas,
                     PTA        **pptad,
                     L_DNAHASH  **pdahash)
@@ -650,10 +656,9 @@ PTA        *pta_small, *pta_big, *ptad;
  * \brief   ptaFindPtByHash()
  *
  * \param[in]    pta
- * \param[in]    dahash built from pta
- * \param[in]    x, y  arbitrary points
- * \param[out]   pindex index into pta if (x,y) is in pta;
- *                       -1 otherwise
+ * \param[in]    dahash     built from pta
+ * \param[in]    x, y       arbitrary points
+ * \param[out]   pindex     index into pta if (x,y) is in pta; -1 otherwise
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -670,7 +675,7 @@ PTA        *pta_small, *pta_big, *ptad;
  *          index into %pta to check if the point (x,y) has been found before.
  * </pre>
  */
-l_int32
+l_ok
 ptaFindPtByHash(PTA        *pta,
                 L_DNAHASH  *dahash,
                 l_int32     x,

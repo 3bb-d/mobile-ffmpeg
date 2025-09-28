@@ -256,8 +256,8 @@ pix_free(void  *ptr)
 /*!
  * \brief   setPixMemoryManager()
  *
- * \param[in]   allocator [optional]; use NULL to skip
- * \param[in]   deallocator [optional]; use NULL to skip
+ * \param[in]   allocator    [optional] use NULL to skip
+ * \param[in]   deallocator  [optional] use NULL to skip
  * \return  void
  *
  * <pre>
@@ -309,7 +309,7 @@ PIX  *pixd;
 
     if ((pixd = pixCreateNoInit(width, height, depth)) == NULL)
         return (PIX *)ERROR_PTR("pixd not made", procName, NULL);
-    memset(pixd->data, 0, 4 * pixd->wpl * pixd->h);
+    memset(pixd->data, 0, 4LL * pixd->wpl * pixd->h);
     return pixd;
 }
 
@@ -323,7 +323,7 @@ PIX  *pixd;
  *
  * <pre>
  * Notes:
- *      (1) Must set pad bits to avoid reading unitialized data, because
+ *      (1) Must set pad bits to avoid reading uninitialized data, because
  *          some optimized routines (e.g., pixConnComp()) read from pad bits.
  * </pre>
  */
@@ -364,7 +364,7 @@ l_uint32  *data;
  * </pre>
  */
 PIX *
-pixCreateTemplate(PIX  *pixs)
+pixCreateTemplate(const PIX  *pixs)
 {
 PIX  *pixd;
 
@@ -375,7 +375,7 @@ PIX  *pixd;
 
     if ((pixd = pixCreateTemplateNoInit(pixs)) == NULL)
         return (PIX *)ERROR_PTR("pixd not made", procName, NULL);
-    memset(pixd->data, 0, 4 * pixd->wpl * pixd->h);
+    memset(pixd->data, 0, 4LL * pixd->wpl * pixd->h);
     return pixd;
 }
 
@@ -394,7 +394,7 @@ PIX  *pixd;
  * </pre>
  */
 PIX *
-pixCreateTemplateNoInit(PIX  *pixs)
+pixCreateTemplateNoInit(const PIX  *pixs)
 {
 l_int32  w, h, d;
 PIX     *pixd;
@@ -426,13 +426,14 @@ PIX     *pixd;
  * Notes:
  *      (1) It is assumed that all 32 bit pix have 3 spp.  If there is
  *          a valid alpha channel, this will be set to 4 spp later.
- *      (2) If the number of bytes to be allocated is larger than the
+ *      (2) All pixCreate*() functions call pixCreateHeader().
+            If the number of bytes to be allocated is larger than the
  *          maximum value in an int32, we can get overflow, resulting
  *          in a smaller amount of memory actually being allocated.
  *          Later, an attempt to access memory that wasn't allocated will
  *          cause a crash.  So to avoid crashing a program (or worse)
- *          with bad (or malicious) input, this is where we limit the
- *          requested allocation of image data in a typesafe way.
+ *          with bad (or malicious) input, we limit the requested
+ *          allocation of image data in a typesafe way.
  * </pre>
  */
 PIX *
@@ -455,17 +456,15 @@ PIX      *pixd;
     if (height <= 0)
         return (PIX *)ERROR_PTR("height must be > 0", procName, NULL);
 
-        /* Avoid overflow in malloc arg, malicious or otherwise */
-    wpl = 0;
+        /* Avoid overflow in malloc, malicious or otherwise */
     wpl64 = ((l_uint64)width * (l_uint64)depth + 31) / 32;
     if (wpl64 > ((1LL << 29) - 1)) {
         L_ERROR("requested w = %d, h = %d, d = %d\n",
                 procName, width, height, depth);
         return (PIX *)ERROR_PTR("wpl >= 2^29", procName, NULL);
-    } else {
-      wpl = (l_int32)wpl64;
     }
-    bignum = 4L * wpl * height;   /* number of bytes to be requested */
+    wpl = (l_int32)wpl64;
+    bignum = 4LL * wpl * height;   /* number of bytes to be requested */
     if (bignum > ((1LL << 31) - 1)) {
         L_ERROR("requested w = %d, h = %d, d = %d\n",
                 procName, width, height, depth);
@@ -482,7 +481,6 @@ PIX      *pixd;
         pixSetSpp(pixd, 3);
     else
         pixSetSpp(pixd, 1);
-
     pixd->refcount = 1;
     pixd->informat = IFF_UNKNOWN;
     return pixd;
@@ -532,7 +530,7 @@ pixClone(PIX  *pixs)
 /*!
  * \brief   pixDestroy()
  *
- * \param[in,out]   ppix will be nulled
+ * \param[in,out]   ppix     will be set to null before returning
  * \return  void
  *
  * <pre>
@@ -599,8 +597,8 @@ char      *text;
 /*!
  * \brief   pixCopy()
  *
- * \param[in]    pixd [optional]; can be null, or equal to pixs,
- *                    or different from pixs
+ * \param[in]    pixd   [optional] can be null, equal to pixs,
+ *                      different from pixs
  * \param[in]    pixs
  * \return  pixd, or NULL on error
  *
@@ -627,11 +625,10 @@ char      *text;
  * </pre>
  */
 PIX *
-pixCopy(PIX  *pixd,   /* can be null */
-        PIX  *pixs)
+pixCopy(PIX        *pixd,   /* can be null */
+        const PIX  *pixs)
 {
-l_int32    bytes;
-l_uint32  *datas, *datad;
+l_int32  bytes;
 
     PROCNAME("pixCopy");
 
@@ -647,9 +644,7 @@ l_uint32  *datas, *datad;
     if (!pixd) {
         if ((pixd = pixCreateTemplate(pixs)) == NULL)
             return (PIX *)ERROR_PTR("pixd not made", procName, NULL);
-        datas = pixGetData(pixs);
-        datad = pixGetData(pixd);
-        memcpy((char *)datad, (char *)datas, bytes);
+        memcpy(pixd->data, pixs->data, bytes);
         return pixd;
     }
 
@@ -670,9 +665,7 @@ l_uint32  *datas, *datad;
     pixCopyText(pixd, pixs);
 
         /* Copy image data */
-    datas = pixGetData(pixs);
-    datad = pixGetData(pixd);
-    memcpy((char*)datad, (char*)datas, bytes);
+    memcpy(pixd->data, pixs->data, bytes);
     return pixd;
 }
 
@@ -680,8 +673,8 @@ l_uint32  *datas, *datad;
 /*!
  * \brief   pixResizeImageData()
  *
- * \param[in]    pixd gets new uninitialized buffer for image data
- * \param[in]    pixs determines the size of the buffer; not changed
+ * \param[in]   pixd   gets new uninitialized buffer for image data
+ * \param[in]   pixs   determines the size of the buffer; not changed
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -694,9 +687,9 @@ l_uint32  *datas, *datad;
  *      (2) On failure to allocate, pixd is unchanged.
  * </pre>
  */
-l_int32
-pixResizeImageData(PIX  *pixd,
-                   PIX  *pixs)
+l_ok
+pixResizeImageData(PIX        *pixd,
+                   const PIX  *pixs)
 {
 l_int32    w, h, d, wpl, bytes;
 l_uint32  *data;
@@ -733,20 +726,22 @@ l_uint32  *data;
 /*!
  * \brief   pixCopyColormap()
  *
- * \param[in]    pixd, pixs dest and src Pix
+ * \param[in]   pixd
+ * \param[in]   pixs   copies the colormap to %pixd
  * \return  0 if OK, 1 on error
  *
  * <pre>
  * Notes:
- *      (1) This always destroys any colormap in pixd (except if
- *          the operation is a no-op.
+ *      (1) This destroys the colormap in pixd, unless the operation is a no-op
  * </pre>
  */
-l_int32
-pixCopyColormap(PIX  *pixd,
-                PIX  *pixs)
+l_ok
+pixCopyColormap(PIX        *pixd,
+                const PIX  *pixs)
 {
-PIXCMAP  *cmaps, *cmapd;
+l_int32         valid;
+const PIXCMAP  *cmaps;
+PIXCMAP        *cmapd;
 
     PROCNAME("pixCopyColormap");
 
@@ -758,13 +753,15 @@ PIXCMAP  *cmaps, *cmapd;
         return 0;   /* no-op */
 
     pixDestroyColormap(pixd);
-    if ((cmaps = pixGetColormap(pixs)) == NULL)  /* not an error */
+    if ((cmaps = pixs->colormap) == NULL)  /* not an error */
         return 0;
+    pixcmapIsValid(cmaps, &valid);
+    if (!valid)
+        return ERROR_INT("cmap not valid", procName, 1);
 
     if ((cmapd = pixcmapCopy(cmaps)) == NULL)
         return ERROR_INT("cmapd not made", procName, 1);
     pixSetColormap(pixd, cmapd);
-
     return 0;
 }
 
@@ -772,12 +769,12 @@ PIXCMAP  *cmaps, *cmapd;
 /*!
  * \brief   pixSizesEqual()
  *
- * \param[in]    pix1, pix2  two pix
+ * \param[in]    pix1, pix2
  * \return  1 if the two pix have same {h, w, d}; 0 otherwise.
  */
 l_int32
-pixSizesEqual(PIX  *pix1,
-              PIX  *pix2)
+pixSizesEqual(const PIX  *pix1,
+              const PIX  *pix2)
 {
     PROCNAME("pixSizesEqual");
 
@@ -799,10 +796,10 @@ pixSizesEqual(PIX  *pix1,
 /*!
  * \brief   pixTransferAllData()
  *
- * \param[in]      pixd must be different from pixs
- * \param[in,out]  ppixs will be nulled if refcount goes to 0
- * \param[in]      copytext 1 to copy the text field; 0 to skip
- * \param[in]      copyformat 1 to copy the informat field; 0 to skip
+ * \param[in]      pixd        must be different from pixs
+ * \param[in,out]  ppixs       will be nulled if refcount goes to 0
+ * \param[in]      copytext    1 to copy the text field; 0 to skip
+ * \param[in]      copyformat  1 to copy the informat field; 0 to skip
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -849,7 +846,7 @@ pixSizesEqual(PIX  *pix1,
  *              maintains an unchanged handle to it.
  * </pre>
  */
-l_int32
+l_ok
 pixTransferAllData(PIX     *pixd,
                    PIX    **ppixs,
                    l_int32  copytext,
@@ -882,7 +879,7 @@ PIX     *pixs;
     } else {  /* preserve pixs by making a copy of the data, cmap, text */
         pixResizeImageData(pixd, pixs);
         nbytes = 4 * pixGetWpl(pixs) * pixGetHeight(pixs);
-        memcpy((char *)pixGetData(pixd), (char *)pixGetData(pixs), nbytes);
+        memcpy(pixGetData(pixd), pixGetData(pixs), nbytes);
         pixCopyColormap(pixd, pixs);
         if (copytext)
             pixCopyText(pixd, pixs);
@@ -904,9 +901,9 @@ PIX     *pixs;
 /*!
  * \brief   pixSwapAndDestroy()
  *
- * \param[out]     ppixd [optional] input pixd can be null,
- *                       and it must be different from pixs
- * \param[in,out]  ppixs will be nulled after the swap
+ * \param[out]     ppixd   [optional] input pixd can be null,
+ *                         and it must be different from pixs
+ * \param[in,out]  ppixs   will be nulled after the swap
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -939,7 +936,7 @@ PIX     *pixs;
  * \endcode
  * </pre>
  */
-l_int32
+l_ok
 pixSwapAndDestroy(PIX  **ppixd,
                   PIX  **ppixs)
 {
@@ -965,7 +962,7 @@ pixSwapAndDestroy(PIX  **ppixd,
  *                                Accessors                           *
  *--------------------------------------------------------------------*/
 l_int32
-pixGetWidth(PIX  *pix)
+pixGetWidth(const PIX  *pix)
 {
     PROCNAME("pixGetWidth");
 
@@ -995,7 +992,7 @@ pixSetWidth(PIX     *pix,
 
 
 l_int32
-pixGetHeight(PIX  *pix)
+pixGetHeight(const PIX  *pix)
 {
     PROCNAME("pixGetHeight");
 
@@ -1025,7 +1022,7 @@ pixSetHeight(PIX     *pix,
 
 
 l_int32
-pixGetDepth(PIX  *pix)
+pixGetDepth(const PIX  *pix)
 {
     PROCNAME("pixGetDepth");
 
@@ -1056,14 +1053,14 @@ pixSetDepth(PIX     *pix,
  * \brief   pixGetDimensions()
  *
  * \param[in]    pix
- * \param[out]   pw, ph, pd [optional]  each can be null
+ * \param[out]   pw, ph, pd    [optional] each can be null
  * \return  0 if OK, 1 on error
  */
-l_int32
-pixGetDimensions(PIX      *pix,
-                 l_int32  *pw,
-                 l_int32  *ph,
-                 l_int32  *pd)
+l_ok
+pixGetDimensions(const PIX  *pix,
+                 l_int32    *pw,
+                 l_int32    *ph,
+                 l_int32    *pd)
 {
     PROCNAME("pixGetDimensions");
 
@@ -1083,10 +1080,10 @@ pixGetDimensions(PIX      *pix,
  * \brief   pixSetDimensions()
  *
  * \param[in]    pix
- * \param[in]    w, h, d use 0 to skip the setting for any of these
+ * \param[in]    w, h, d   use 0 to skip the setting for any of these
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 pixSetDimensions(PIX     *pix,
                  l_int32  w,
                  l_int32  h,
@@ -1106,13 +1103,13 @@ pixSetDimensions(PIX     *pix,
 /*!
  * \brief   pixCopyDimensions()
  *
- * \param[in]    pixd
- * \param[in]    pixd
+ * \param[in]   pixd
+ * \param[in]   pixs
  * \return  0 if OK, 1 on error
  */
-l_int32
-pixCopyDimensions(PIX  *pixd,
-                  PIX  *pixs)
+l_ok
+pixCopyDimensions(PIX        *pixd,
+                  const PIX  *pixs)
 {
     PROCNAME("pixCopyDimensions");
 
@@ -1132,7 +1129,7 @@ pixCopyDimensions(PIX  *pixd,
 
 
 l_int32
-pixGetSpp(PIX  *pix)
+pixGetSpp(const PIX  *pix)
 {
     PROCNAME("pixGetSpp");
 
@@ -1144,17 +1141,20 @@ pixGetSpp(PIX  *pix)
 
 
 /*
- *  pixSetSpp()
- *      Input:  pix
- *              spp (1, 3 or 4)
- *      Return: 0 if OK, 1 on error
+ * \brief   pixSetSpp()
  *
- *  Notes:
+ * \param[in]   pix
+ * \param[in]   spp   1, 3 or 4 samples
+ * \return  0 if OK, 1 on error
+ *
+ * <pre>
+ * Notes:
  *      (1) For a 32 bpp pix, this can be used to ignore the
  *          alpha sample (spp == 3) or to use it (spp == 4).
  *          For example, to write a spp == 4 image without the alpha
  *          sample (as an rgb pix), call pixSetSpp(pix, 3) and
  *          then write it out as a png.
+ * </pre>
  */
 l_int32
 pixSetSpp(PIX     *pix,
@@ -1175,13 +1175,13 @@ pixSetSpp(PIX     *pix,
 /*!
  * \brief   pixCopySpp()
  *
- * \param[in]    pixd
- * \param[in]    pixs
+ * \param[in]   pixd
+ * \param[in]   pixs
  * \return  0 if OK, 1 on error
  */
-l_int32
-pixCopySpp(PIX  *pixd,
-           PIX  *pixs)
+l_ok
+pixCopySpp(PIX        *pixd,
+           const PIX  *pixs)
 {
     PROCNAME("pixCopySpp");
 
@@ -1198,7 +1198,7 @@ pixCopySpp(PIX  *pixd,
 
 
 l_int32
-pixGetWpl(PIX  *pix)
+pixGetWpl(const PIX  *pix)
 {
     PROCNAME("pixGetWpl");
 
@@ -1223,7 +1223,7 @@ pixSetWpl(PIX     *pix,
 
 
 l_int32
-pixGetRefcount(PIX  *pix)
+pixGetRefcount(const PIX  *pix)
 {
     PROCNAME("pixGetRefcount");
 
@@ -1248,7 +1248,7 @@ pixChangeRefcount(PIX     *pix,
 
 
 l_int32
-pixGetXRes(PIX  *pix)
+pixGetXRes(const PIX  *pix)
 {
     PROCNAME("pixGetXRes");
 
@@ -1273,7 +1273,7 @@ pixSetXRes(PIX     *pix,
 
 
 l_int32
-pixGetYRes(PIX  *pix)
+pixGetYRes(const PIX  *pix)
 {
     PROCNAME("pixGetYRes");
 
@@ -1301,13 +1301,13 @@ pixSetYRes(PIX     *pix,
  * \brief   pixGetResolution()
  *
  * \param[in]    pix
- * \param[out]   pxres, pyres [optional]  each can be null
+ * \param[out]   pxres, pyres   [optional] each can be null
  * \return  0 if OK, 1 on error
  */
-l_int32
-pixGetResolution(PIX      *pix,
-                 l_int32  *pxres,
-                 l_int32  *pyres)
+l_ok
+pixGetResolution(const PIX  *pix,
+                 l_int32    *pxres,
+                 l_int32    *pyres)
 {
     PROCNAME("pixGetResolution");
 
@@ -1326,11 +1326,11 @@ pixGetResolution(PIX      *pix,
 /*!
  * \brief   pixSetResolution()
  *
- * \param[in]    pix
- * \param[in]    xres, yres use 0 to skip the setting for either of these
+ * \param[in]   pix
+ * \param[in]   xres, yres   use 0 to skip setting a value for either of these
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 pixSetResolution(PIX     *pix,
                  l_int32  xres,
                  l_int32  yres)
@@ -1346,8 +1346,8 @@ pixSetResolution(PIX     *pix,
 
 
 l_int32
-pixCopyResolution(PIX  *pixd,
-                  PIX  *pixs)
+pixCopyResolution(PIX        *pixd,
+                  const PIX  *pixs)
 {
     PROCNAME("pixCopyResolution");
 
@@ -1383,7 +1383,7 @@ pixScaleResolution(PIX       *pix,
 
 
 l_int32
-pixGetInputFormat(PIX  *pix)
+pixGetInputFormat(const PIX  *pix)
 {
     PROCNAME("pixGetInputFormat");
 
@@ -1407,8 +1407,8 @@ pixSetInputFormat(PIX     *pix,
 
 
 l_int32
-pixCopyInputFormat(PIX  *pixd,
-                   PIX  *pixs)
+pixCopyInputFormat(PIX        *pixd,
+                   const PIX  *pixs)
 {
     PROCNAME("pixCopyInputFormat");
 
@@ -1440,13 +1440,14 @@ pixSetSpecial(PIX     *pix,
 /*!
  * \brief   pixGetText()
  *
- * \param[in]    pix
+ * \param[in]   pix
  * \return  ptr to existing text string
  *
  * <pre>
  * Notes:
- *      (1) The text string belongs to the pix.  The caller must
- *          NOT free it!
+ *      (1) The text string belongs to the pix:
+ *          * the caller must NOT free it
+ *          * it must not be used after the pix is destroyed
  * </pre>
  */
 char *
@@ -1463,8 +1464,8 @@ pixGetText(PIX  *pix)
 /*!
  * \brief   pixSetText()
  *
- * \param[in]    pix
- * \param[in]    textstring can be null
+ * \param[in]   pix
+ * \param[in]   textstring   can be null
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -1473,7 +1474,7 @@ pixGetText(PIX  *pix)
  *          the input textstring there.
  * </pre>
  */
-l_int32
+l_ok
 pixSetText(PIX         *pix,
            const char  *textstring)
 {
@@ -1491,7 +1492,7 @@ pixSetText(PIX         *pix,
  * \brief   pixAddText()
  *
  * \param[in]    pix
- * \param[in]    textstring
+ * \param[in]    textstring   can be null
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -1501,7 +1502,7 @@ pixSetText(PIX         *pix,
  *          string can be null.
  * </pre>
  */
-l_int32
+l_ok
 pixAddText(PIX         *pix,
            const char  *textstring)
 {
@@ -1520,8 +1521,8 @@ char  *newstring;
 
 
 l_int32
-pixCopyText(PIX  *pixd,
-            PIX  *pixs)
+pixCopyText(PIX        *pixd,
+            const PIX  *pixs)
 {
     PROCNAME("pixCopyText");
 
@@ -1532,7 +1533,7 @@ pixCopyText(PIX  *pixd,
     if (pixs == pixd)
         return 0;   /* no-op */
 
-    pixSetText(pixd, pixGetText(pixs));
+    pixSetText(pixd, pixs->text);
     return 0;
 }
 
@@ -1551,8 +1552,8 @@ pixGetColormap(PIX  *pix)
 /*!
  * \brief   pixSetColormap()
  *
- * \param[in]    pix
- * \param[in]    colormap to be assigned
+ * \param[in]   pix
+ * \param[in]   colormap   to be assigned
  * \return  0 if OK, 1 on error.
  *
  * <pre>
@@ -1563,7 +1564,7 @@ pixGetColormap(PIX  *pix)
  *          the new colormap does not belong to any other pix.
  * </pre>
  */
-l_int32
+l_ok
 pixSetColormap(PIX      *pix,
                PIXCMAP  *colormap)
 {
@@ -1581,10 +1582,10 @@ pixSetColormap(PIX      *pix,
 /*!
  * \brief   pixDestroyColormap()
  *
- * \param[in]    pix
+ * \param[in]   pix
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 pixDestroyColormap(PIX  *pix)
 {
 PIXCMAP  *cmap;
@@ -1605,9 +1606,14 @@ PIXCMAP  *cmap;
 /*!
  * \brief   pixGetData()
  *
- *  Notes:
+ * \param[in]    pix
+ * \return  ptr to image data
+ *
+ * <pre>
+ * Notes:
  *      (1) This gives a new handle for the data.  The data is still
  *          owned by the pix, so do not call LEPT_FREE() on it.
+ * </pre>
  */
 l_uint32 *
 pixGetData(PIX  *pix)
@@ -1623,9 +1629,15 @@ pixGetData(PIX  *pix)
 /*!
  * \brief   pixSetData()
  *
- *  Notes:
+ * \param[in]   pix
+ * \param[in]   data
+ * \return  0 if OK, 1 on error
+ *
+ * <pre>
+ * Notes:
  *      (1) This does not free any existing data.  To free existing
  *          data, use pixFreeData() before pixSetData().
+ * </pre>
  */
 l_int32
 pixSetData(PIX       *pix,
@@ -1644,13 +1656,18 @@ pixSetData(PIX       *pix,
 /*!
  * \brief   pixExtractData()
  *
- *  Notes:
+ * \param[in]   pix
+ * \return  ptr to data, or null on error
+ *
+ * <pre>
+ * Notes:
  *      (1) This extracts the pix image data for use in another context.
  *          The caller still needs to use pixDestroy() on the input pix.
  *      (2) If refcount == 1, the data is extracted and the
  *          pix->data ptr is set to NULL.
  *      (3) If refcount > 1, this simply returns a copy of the data,
  *          using the pix allocator, and leaving the input pix unchanged.
+ * </pre>
  */
 l_uint32 *
 pixExtractData(PIX  *pixs)
@@ -1672,7 +1689,7 @@ l_uint32  *data, *datas;
         datas = pixGetData(pixs);
         if ((data = (l_uint32 *)pix_malloc(bytes)) == NULL)
             return (l_uint32 *)ERROR_PTR("data not made", procName, NULL);
-        memcpy((char *)data, (char *)datas, bytes);
+        memcpy(data, datas, bytes);
     }
 
     return data;
@@ -1682,11 +1699,16 @@ l_uint32  *data, *datas;
 /*!
  * \brief   pixFreeData()
  *
- *  Notes:
+ * \param[in]   pix
+ * \return  0 if OK, 1 on error
+ *
+ * <pre>
+ * Notes:
  *      (1) This frees the data and sets the pix data ptr to null.
  *          It should be used before pixSetData() in the situation where
  *          you want to free any existing data before doing
  *          a subsequent assignment with pixSetData().
+ * </pre>
  */
 l_int32
 pixFreeData(PIX  *pix)
@@ -1713,7 +1735,7 @@ l_uint32  *data;
  * \brief   pixGetLinePtrs()
  *
  * \param[in]    pix
- * \param[out]   psize [optional] array size, which is the pix height
+ * \param[out]   psize   [optional] array size, which is the pix height
  * \return  array of line ptrs, or NULL on error
  *
  * <pre>
@@ -1814,19 +1836,18 @@ extern const char *ImageFileFormatExtensions[];
 /*!
  * \brief   pixPrintStreamInfo()
  *
- * \param[in]    fp file stream
+ * \param[in]    fp    file stream
  * \param[in]    pix
- * \param[in]    text [optional] identifying string; can be null
+ * \param[in]    text  [optional] identifying string; can be null
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 pixPrintStreamInfo(FILE        *fp,
-                   PIX         *pix,
+                   const PIX   *pix,
                    const char  *text)
 {
-char     *textdata;
-l_int32   informat;
-PIXCMAP  *cmap;
+l_int32         informat;
+const PIXCMAP  *cmap;
 
     PROCNAME("pixPrintStreamInfo");
 
@@ -1838,20 +1859,20 @@ PIXCMAP  *cmap;
     if (text)
         fprintf(fp, "  Pix Info for %s:\n", text);
     fprintf(fp, "    width = %d, height = %d, depth = %d, spp = %d\n",
-               pixGetWidth(pix), pixGetHeight(pix), pixGetDepth(pix),
-               pixGetSpp(pix));
+            pixGetWidth(pix), pixGetHeight(pix), pixGetDepth(pix),
+            pixGetSpp(pix));
     fprintf(fp, "    wpl = %d, data = %p, refcount = %d\n",
-               pixGetWpl(pix), pixGetData(pix), pixGetRefcount(pix));
+            pixGetWpl(pix), pix->data, pixGetRefcount(pix));
     fprintf(fp, "    xres = %d, yres = %d\n", pixGetXRes(pix), pixGetYRes(pix));
-    if ((cmap = pixGetColormap(pix)) != NULL)
+    if ((cmap = pix->colormap) != NULL)
         pixcmapWriteStream(fp, cmap);
     else
         fprintf(fp, "    no colormap\n");
     informat = pixGetInputFormat(pix);
     fprintf(fp, "    input format: %d (%s)\n", informat,
             ImageFileFormatExtensions[informat]);
-    if ((textdata = pixGetText(pix)) != NULL)
-        fprintf(fp, "    text: %s\n", textdata);
+    if (pix->text != NULL)
+        fprintf(fp, "    text: %s\n", pix->text);
 
     return 0;
 }

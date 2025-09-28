@@ -5,11 +5,6 @@ if [[ -z ${ARCH} ]]; then
     exit 1
 fi
 
-if [[ -z ${IOS_MIN_VERSION} ]]; then
-    echo -e "(*) IOS_MIN_VERSION not defined\n"
-    exit 1
-fi
-
 if [[ -z ${TARGET_SDK} ]]; then
     echo -e "(*) TARGET_SDK not defined\n"
     exit 1
@@ -31,14 +26,18 @@ if ! [ -x "$(command -v pkg-config)" ]; then
 fi
 
 # ENABLE COMMON FUNCTIONS
-. ${BASEDIR}/build/ios-common.sh
+if [[ ${APPLE_TVOS_BUILD} -eq 1 ]]; then
+    . ${BASEDIR}/build/tvos-common.sh
+else
+    . ${BASEDIR}/build/ios-common.sh
+fi
 
-# PREPARING PATHS & DEFINING ${INSTALL_PKG_CONFIG_DIR}
+# PREPARE PATHS & DEFINE ${INSTALL_PKG_CONFIG_DIR}
 LIB_NAME="ffmpeg"
 set_toolchain_clang_paths ${LIB_NAME}
 
 # PREPARING FLAGS
-TARGET_HOST=$(get_target_host)
+BUILD_HOST=$(get_build_host)
 FFMPEG_CFLAGS=""
 FFMPEG_LDFLAGS=""
 export PKG_CONFIG_LIBDIR="${INSTALL_PKG_CONFIG_DIR}"
@@ -47,6 +46,7 @@ TARGET_CPU=""
 TARGET_ARCH=""
 BITCODE_FLAGS=""
 NEON_FLAG=""
+ARCH_OPTIONS="--enable-asm"
 case ${ARCH} in
     armv7)
         TARGET_CPU="armv7"
@@ -66,6 +66,12 @@ case ${ARCH} in
         NEON_FLAG="	--enable-neon"
         BITCODE_FLAGS="-fembed-bitcode -Wc,-fembed-bitcode"
     ;;
+    arm64e)
+        TARGET_CPU="armv8.3-a"
+        TARGET_ARCH="aarch64"
+        NEON_FLAG="	--enable-neon"
+        BITCODE_FLAGS="-fembed-bitcode -Wc,-fembed-bitcode"
+    ;;
     i386)
         TARGET_CPU="i386"
         TARGET_ARCH="i386"
@@ -73,16 +79,23 @@ case ${ARCH} in
         BITCODE_FLAGS=""
     ;;
     x86-64)
+        ARCH_OPTIONS="--disable-asm"
         TARGET_CPU="x86_64"
         TARGET_ARCH="x86_64"
         NEON_FLAG="	--disable-neon"
         BITCODE_FLAGS=""
     ;;
+    x86-64-mac-catalyst)
+        ARCH_OPTIONS="--disable-asm"
+        TARGET_CPU="x86_64"
+        TARGET_ARCH="x86_64"
+        NEON_FLAG="	--disable-neon"
+        BITCODE_FLAGS="-fembed-bitcode -Wc,-fembed-bitcode"
+    ;;
 esac
 
-CONFIGURE_POSTFIX=""
-
-for library in {1..47}
+library=1
+while [[ ${library} -le 49 ]]
 do
     if [[ ${!library} -eq 1 ]]; then
         ENABLED_LIBRARY=$(get_library_name $((library - 1)))
@@ -140,11 +153,6 @@ do
                 FFMPEG_LDFLAGS+=" $(pkg-config --libs --static libass)"
                 CONFIGURE_POSTFIX+=" --enable-libass"
             ;;
-            libiconv)
-                FFMPEG_CFLAGS+=" $(pkg-config --cflags libiconv)"
-                FFMPEG_LDFLAGS+=" $(pkg-config --libs --static libiconv)"
-                CONFIGURE_POSTFIX+=" --enable-iconv"
-            ;;
             libilbc)
                 FFMPEG_CFLAGS+=" $(pkg-config --cflags libilbc)"
                 FFMPEG_LDFLAGS+=" $(pkg-config --libs --static libilbc)"
@@ -182,16 +190,24 @@ do
             ;;
             opencore-amr)
                 FFMPEG_CFLAGS+=" $(pkg-config --cflags opencore-amrnb)"
-                FFMPEG_CFLAGS+=" $(pkg-config --cflags opencore-amrwb)"
                 FFMPEG_LDFLAGS+=" $(pkg-config --libs --static opencore-amrnb)"
-                FFMPEG_LDFLAGS+=" $(pkg-config --libs --static opencore-amrwb)"
                 CONFIGURE_POSTFIX+=" --enable-libopencore-amrnb"
-                CONFIGURE_POSTFIX+=" --enable-libopencore-amrwb"
+            ;;
+            openh264)
+                FFMPEG_CFLAGS+=" $(pkg-config --cflags openh264)"
+                FFMPEG_LDFLAGS+=" $(pkg-config --libs --static openh264)"
+                CONFIGURE_POSTFIX+=" --enable-libopenh264"
             ;;
             opus)
                 FFMPEG_CFLAGS+=" $(pkg-config --cflags opus)"
                 FFMPEG_LDFLAGS+=" $(pkg-config --libs --static opus)"
                 CONFIGURE_POSTFIX+=" --enable-libopus"
+            ;;
+            rubberband)
+                FFMPEG_CFLAGS+=" $(pkg-config --cflags rubberband)"
+                FFMPEG_LDFLAGS+=" $(pkg-config --libs --static rubberband)"
+                FFMPEG_LDFLAGS+=" -framework Accelerate"
+                CONFIGURE_POSTFIX+=" --enable-librubberband --enable-gpl"
             ;;
             sdl)
                 FFMPEG_CFLAGS+=" $(pkg-config --cflags sdl2)"
@@ -230,6 +246,11 @@ do
                 FFMPEG_LDFLAGS+=" $(pkg-config --libs --static twolame)"
                 CONFIGURE_POSTFIX+=" --enable-libtwolame"
             ;;
+            vo-amrwbenc)
+                FFMPEG_CFLAGS+=" $(pkg-config --cflags vo-amrwbenc)"
+                FFMPEG_LDFLAGS+=" $(pkg-config --libs --static vo-amrwbenc)"
+                CONFIGURE_POSTFIX+=" --enable-libvo-amrwbenc"
+            ;;
             wavpack)
                 FFMPEG_CFLAGS+=" $(pkg-config --cflags wavpack)"
                 FFMPEG_LDFLAGS+=" $(pkg-config --libs --static wavpack)"
@@ -262,17 +283,13 @@ do
                 FFMPEG_CFLAGS+=" $(pkg-config --cflags libpng)"
                 FFMPEG_LDFLAGS+=" $(pkg-config --libs --static libpng)"
             ;;
-            libuuid)
-                FFMPEG_CFLAGS+=" $(pkg-config --cflags uuid)"
-                FFMPEG_LDFLAGS+=" $(pkg-config --libs --static uuid)"
-            ;;
             nettle)
                 FFMPEG_CFLAGS+=" $(pkg-config --cflags nettle)"
                 FFMPEG_LDFLAGS+=" $(pkg-config --libs --static nettle)"
                 FFMPEG_CFLAGS+=" $(pkg-config --cflags hogweed)"
                 FFMPEG_LDFLAGS+=" $(pkg-config --libs --static hogweed)"
             ;;
-            ios-*)
+            ios-*|tvos-*)
 
                 # BUILT-IN LIBRARIES SHARE INCLUDE AND LIB DIRECTORIES
                 # INCLUDING ONLY ONE OF THEM IS ENOUGH
@@ -280,23 +297,23 @@ do
                 FFMPEG_LDFLAGS+=" $(pkg-config --libs --static zlib)"
 
                 case ${ENABLED_LIBRARY} in
-                    ios-audiotoolbox)
+                    *-audiotoolbox)
                         CONFIGURE_POSTFIX+=" --enable-audiotoolbox"
                     ;;
-                    ios-avfoundation)
+                    *-avfoundation)
                         CONFIGURE_POSTFIX+=" --enable-avfoundation"
                     ;;
-                    ios-bzip2)
+                    *-bzip2)
                         CONFIGURE_POSTFIX+=" --enable-bzlib"
                     ;;
-                    ios-coreimage)
-                        CONFIGURE_POSTFIX+=" --enable-coreimage"
-                    ;;
-                    ios-videotoolbox)
+                    *-videotoolbox)
                         CONFIGURE_POSTFIX+=" --enable-videotoolbox"
                     ;;
-                    ios-zlib)
+                    *-zlib)
                         CONFIGURE_POSTFIX+=" --enable-zlib"
+                    ;;
+                    *-libiconv)
+                        CONFIGURE_POSTFIX+=" --enable-iconv"
                     ;;
                 esac
             ;;
@@ -304,32 +321,29 @@ do
     else
 
         # THE FOLLOWING LIBRARIES SHOULD BE EXPLICITLY DISABLED TO PREVENT AUTODETECT
-        if [[ ${library} -eq 8 ]]; then
-            CONFIGURE_POSTFIX+=" --disable-iconv"
-        elif [[ ${library} -eq 30 ]]; then
+        # NOTE THAT IDS MUST BE +1 OF THE INDEX VALUE
+        if [[ ${library} -eq 30 ]]; then
             CONFIGURE_POSTFIX+=" --disable-sdl2"
-        elif [[ ${library} -eq 42 ]]; then
-            CONFIGURE_POSTFIX+=" --disable-zlib"
-        elif [[ ${library} -eq 43 ]]; then
-            CONFIGURE_POSTFIX+=" --disable-audiotoolbox"
         elif [[ ${library} -eq 44 ]]; then
-            CONFIGURE_POSTFIX+=" --disable-coreimage"
+            CONFIGURE_POSTFIX+=" --disable-zlib"
         elif [[ ${library} -eq 45 ]]; then
-            CONFIGURE_POSTFIX+=" --disable-bzlib"
+            CONFIGURE_POSTFIX+=" --disable-audiotoolbox"
         elif [[ ${library} -eq 46 ]]; then
-            CONFIGURE_POSTFIX+=" --disable-videotoolbox"
+            CONFIGURE_POSTFIX+=" --disable-bzlib"
         elif [[ ${library} -eq 47 ]]; then
+            CONFIGURE_POSTFIX+=" --disable-videotoolbox"
+        elif [[ ${library} -eq 48 ]]; then
             CONFIGURE_POSTFIX+=" --disable-avfoundation"
+        elif [[ ${library} -eq 49 ]]; then
+            CONFIGURE_POSTFIX+=" --disable-iconv"
         fi
     fi
+
+    ((library++))
 done
 
-# BUILD SHARED (DEFAULT) OR STATIC LIBRARIES
-if [[ -z ${MOBILE_FFMPEG_STATIC} ]]; then
-    BUILD_LIBRARY_OPTIONS="--enable-shared --disable-static";
-else
-    BUILD_LIBRARY_OPTIONS="--enable-static --disable-shared";
-fi
+# ALWAYS BUILD STATIC LIBRARIES
+BUILD_LIBRARY_OPTIONS="--enable-static --disable-shared";
 
 # OPTIMIZE FOR SPEED INSTEAD OF SIZE
 if [[ -z ${MOBILE_FFMPEG_OPTIMIZED_FOR_SPEED} ]]; then
@@ -338,33 +352,75 @@ else
     SIZE_OPTIONS="";
 fi
 
+# SET DEBUG OPTIONS
+if [[ -z ${MOBILE_FFMPEG_DEBUG} ]]; then
+    DEBUG_OPTIONS="--disable-debug";
+else
+    DEBUG_OPTIONS="--enable-debug --disable-stripping";
+fi
+
 # CFLAGS PARTS
 ARCH_CFLAGS=$(get_arch_specific_cflags);
 APP_CFLAGS=$(get_app_specific_cflags ${LIB_NAME});
 COMMON_CFLAGS=$(get_common_cflags);
-OPTIMIZATION_CFLAGS=$(get_size_optimization_cflags ${LIB_NAME});
+if [[ -z ${MOBILE_FFMPEG_DEBUG} ]]; then
+    OPTIMIZATION_CFLAGS="$(get_size_optimization_cflags ${LIB_NAME})"
+else
+    OPTIMIZATION_CFLAGS="${MOBILE_FFMPEG_DEBUG}"
+fi
 MIN_VERSION_CFLAGS=$(get_min_version_cflags);
 COMMON_INCLUDES=$(get_common_includes);
 
 # LDFLAGS PARTS
 ARCH_LDFLAGS=$(get_arch_specific_ldflags);
+if [[ -z ${MOBILE_FFMPEG_DEBUG} ]]; then
+    OPTIMIZATION_FLAGS="$(get_size_optimization_ldflags ${LIB_NAME})"
+else
+    OPTIMIZATION_FLAGS="${MOBILE_FFMPEG_DEBUG}"
+fi
 LINKED_LIBRARIES=$(get_common_linked_libraries);
 COMMON_LDFLAGS=$(get_common_ldflags);
 
 # REORDERED FLAGS
-export CFLAGS="${ARCH_CFLAGS} ${APP_CFLAGS} ${COMMON_CFLAGS} ${OPTIMIZATION_CFLAGS} ${MIN_VERSION_CFLAGS} ${FFMPEG_CFLAGS} ${COMMON_INCLUDES}"
+export CFLAGS="${ARCH_CFLAGS} ${APP_CFLAGS} ${COMMON_CFLAGS} ${OPTIMIZATION_CFLAGS} ${MIN_VERSION_CFLAGS}${FFMPEG_CFLAGS} ${COMMON_INCLUDES}"
 export CXXFLAGS=$(get_cxxflags ${LIB_NAME})
-export LDFLAGS="${ARCH_LDFLAGS} ${FFMPEG_LDFLAGS} ${LINKED_LIBRARIES} ${COMMON_LDFLAGS} ${BITCODE_FLAGS}"
-
-cd ${BASEDIR}/src/${LIB_NAME} || exit 1
+export LDFLAGS="${ARCH_LDFLAGS}${FFMPEG_LDFLAGS} ${LINKED_LIBRARIES} ${COMMON_LDFLAGS} ${BITCODE_FLAGS} ${OPTIMIZATION_FLAGS}"
 
 echo -n -e "\n${LIB_NAME}: "
 
-make distclean 2>/dev/null 1>/dev/null
+# DOWNLOAD LIBRARY
+DOWNLOAD_RESULT=$(download_library_source ${LIB_NAME})
+if [[ ${DOWNLOAD_RESULT} -ne 0 ]]; then
+    exit 1
+fi
+
+cd ${BASEDIR}/src/${LIB_NAME} || exit 1
+
+if [[ -z ${NO_WORKSPACE_CLEANUP_ffmpeg} ]]; then
+    echo -e "INFO: Cleaning workspace for ${LIB_NAME}" 1>>${BASEDIR}/build.log 2>&1
+    make distclean 2>/dev/null 1>/dev/null
+fi
+
+########################### CUSTOMIZATIONS #######################
+
+# 1. Workaround to prevent adding of -mdynamic-no-pic flag
+${SED_INLINE} 's/check_cflags -mdynamic-no-pic && add_asflags -mdynamic-no-pic;/check_cflags -mdynamic-no-pic;/g' ./configure 1>>${BASEDIR}/build.log 2>&1
+
+# 2. Workaround for videotoolbox on mac catalyst
+if [ ${ARCH} == "x86-64-mac-catalyst" ]; then
+    ${SED_INLINE} 's/    CFDictionarySetValue(buffer_attributes\, kCVPixelBufferOpenGLESCompatibilityKey/   \/\/ CFDictionarySetValue(buffer_attributes\, kCVPixelBufferOpenGLESCompatibilityKey/g' ${BASEDIR}/src/${LIB_NAME}/libavcodec/videotoolbox.c
+else
+    ${SED_INLINE} 's/   \/\/ CFDictionarySetValue(buffer_attributes\, kCVPixelBufferOpenGLESCompatibilityKey/    CFDictionarySetValue(buffer_attributes\, kCVPixelBufferOpenGLESCompatibilityKey/g' ${BASEDIR}/src/${LIB_NAME}/libavcodec/videotoolbox.c
+fi
+
+# 3. Use thread local log level
+${SED_INLINE} 's/static int av_log_level/__thread int av_log_level/g' ${BASEDIR}/src/${LIB_NAME}/libavutil/log.c 1>>${BASEDIR}/build.log 2>&1
+
+###################################################################
 
 ./configure \
     --sysroot=${SDK_PATH} \
-    --prefix=${BASEDIR}/prebuilt/ios-$(get_target_host)/${LIB_NAME} \
+    --prefix=${BASEDIR}/prebuilt/$(get_target_build_directory)/${LIB_NAME} \
     --enable-version3 \
     --arch="${TARGET_ARCH}" \
     --cpu="${TARGET_CPU}" \
@@ -378,7 +434,7 @@ make distclean 2>/dev/null 1>/dev/null
     ${NEON_FLAG} \
     --enable-cross-compile \
     --enable-pic \
-    --enable-asm \
+    ${ARCH_OPTIONS} \
     --enable-inline-asm \
     --enable-optimizations \
     --enable-swscale \
@@ -387,11 +443,12 @@ make distclean 2>/dev/null 1>/dev/null
     --disable-v4l2-m2m \
     --disable-outdev=v4l2 \
     --disable-outdev=fbdev \
+    --disable-outdev=audiotoolbox \
     --disable-indev=v4l2 \
     --disable-indev=fbdev \
     --disable-openssl \
     --disable-xmm-clobber-test \
-    --disable-debug \
+    ${DEBUG_OPTIONS} \
     --disable-neon-clobber-test \
     --disable-programs \
     --disable-postproc \
@@ -423,13 +480,26 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-make ${MOBILE_FFMPEG_DEBUG} -j$(get_cpu_count) 1>>${BASEDIR}/build.log 2>&1
+if [[ -z ${NO_OUTPUT_REDIRECTION} ]]; then
+    make -j$(get_cpu_count) 1>>${BASEDIR}/build.log 2>&1
 
-if [ $? -ne 0 ]; then
-    echo "failed"
-    exit 1
+    if [ $? -ne 0 ]; then
+        echo "failed"
+        exit 1
+    fi
+else
+    echo -e "started\n"
+    make -j$(get_cpu_count) 1>>${BASEDIR}/build.log 2>&1
+
+    if [ $? -ne 0 ]; then
+        echo -n -e "\n${LIB_NAME}: failed\n"
+        exit 1
+    else
+        echo -n -e "\n${LIB_NAME}: "
+    fi
 fi
 
+rm -rf ${BASEDIR}/prebuilt/$(get_target_build_directory)/${LIB_NAME} 1>>${BASEDIR}/build.log 2>&1
 make install 1>>${BASEDIR}/build.log 2>&1
 
 if [ $? -ne 0 ]; then
@@ -438,28 +508,28 @@ if [ $? -ne 0 ]; then
 fi
 
 # MANUALLY ADD REQUIRED HEADERS
-mkdir -p ${BASEDIR}/prebuilt/ios-$(get_target_host)/ffmpeg/include/libavutil/x86
-mkdir -p ${BASEDIR}/prebuilt/ios-$(get_target_host)/ffmpeg/include/libavutil/arm
-mkdir -p ${BASEDIR}/prebuilt/ios-$(get_target_host)/ffmpeg/include/libavutil/aarch64
-mkdir -p ${BASEDIR}/prebuilt/ios-$(get_target_host)/ffmpeg/include/libavcodec/x86
-mkdir -p ${BASEDIR}/prebuilt/ios-$(get_target_host)/ffmpeg/include/libavcodec/arm
-cp -f ${BASEDIR}/src/ffmpeg/config.h ${BASEDIR}/prebuilt/ios-$(get_target_host)/ffmpeg/include
-cp -f ${BASEDIR}/src/ffmpeg/libavcodec/mathops.h ${BASEDIR}/prebuilt/ios-$(get_target_host)/ffmpeg/include/libavcodec
-cp -f ${BASEDIR}/src/ffmpeg/libavcodec/x86/mathops.h ${BASEDIR}/prebuilt/ios-$(get_target_host)/ffmpeg/include/libavcodec/x86
-cp -f ${BASEDIR}/src/ffmpeg/libavcodec/arm/mathops.h ${BASEDIR}/prebuilt/ios-$(get_target_host)/ffmpeg/include/libavcodec/arm
-cp -f ${BASEDIR}/src/ffmpeg/libavformat/network.h ${BASEDIR}/prebuilt/ios-$(get_target_host)/ffmpeg/include/libavformat
-cp -f ${BASEDIR}/src/ffmpeg/libavformat/os_support.h ${BASEDIR}/prebuilt/ios-$(get_target_host)/ffmpeg/include/libavformat
-cp -f ${BASEDIR}/src/ffmpeg/libavformat/url.h ${BASEDIR}/prebuilt/ios-$(get_target_host)/ffmpeg/include/libavformat
-cp -f ${BASEDIR}/src/ffmpeg/libavutil/internal.h ${BASEDIR}/prebuilt/ios-$(get_target_host)/ffmpeg/include/libavutil
-cp -f ${BASEDIR}/src/ffmpeg/libavutil/libm.h ${BASEDIR}/prebuilt/ios-$(get_target_host)/ffmpeg/include/libavutil
-cp -f ${BASEDIR}/src/ffmpeg/libavutil/reverse.h ${BASEDIR}/prebuilt/ios-$(get_target_host)/ffmpeg/include/libavutil
-cp -f ${BASEDIR}/src/ffmpeg/libavutil/thread.h ${BASEDIR}/prebuilt/ios-$(get_target_host)/ffmpeg/include/libavutil
-cp -f ${BASEDIR}/src/ffmpeg/libavutil/timer.h ${BASEDIR}/prebuilt/ios-$(get_target_host)/ffmpeg/include/libavutil
-cp -f ${BASEDIR}/src/ffmpeg/libavutil/x86/asm.h ${BASEDIR}/prebuilt/ios-$(get_target_host)/ffmpeg/include/libavutil/x86
-cp -f ${BASEDIR}/src/ffmpeg/libavutil/x86/timer.h ${BASEDIR}/prebuilt/ios-$(get_target_host)/ffmpeg/include/libavutil/x86
-cp -f ${BASEDIR}/src/ffmpeg/libavutil/arm/timer.h ${BASEDIR}/prebuilt/ios-$(get_target_host)/ffmpeg/include/libavutil/arm
-cp -f ${BASEDIR}/src/ffmpeg/libavutil/aarch64/timer.h ${BASEDIR}/prebuilt/ios-$(get_target_host)/ffmpeg/include/libavutil/aarch64
-cp -f ${BASEDIR}/src/ffmpeg/libavutil/x86/emms.h ${BASEDIR}/prebuilt/ios-$(get_target_host)/ffmpeg/include/libavutil/x86
+mkdir -p ${BASEDIR}/prebuilt/$(get_target_build_directory)/ffmpeg/include/libavutil/x86
+mkdir -p ${BASEDIR}/prebuilt/$(get_target_build_directory)/ffmpeg/include/libavutil/arm
+mkdir -p ${BASEDIR}/prebuilt/$(get_target_build_directory)/ffmpeg/include/libavutil/aarch64
+mkdir -p ${BASEDIR}/prebuilt/$(get_target_build_directory)/ffmpeg/include/libavcodec/x86
+mkdir -p ${BASEDIR}/prebuilt/$(get_target_build_directory)/ffmpeg/include/libavcodec/arm
+cp -f ${BASEDIR}/src/ffmpeg/config.h ${BASEDIR}/prebuilt/$(get_target_build_directory)/ffmpeg/include
+cp -f ${BASEDIR}/src/ffmpeg/libavcodec/mathops.h ${BASEDIR}/prebuilt/$(get_target_build_directory)/ffmpeg/include/libavcodec
+cp -f ${BASEDIR}/src/ffmpeg/libavcodec/x86/mathops.h ${BASEDIR}/prebuilt/$(get_target_build_directory)/ffmpeg/include/libavcodec/x86
+cp -f ${BASEDIR}/src/ffmpeg/libavcodec/arm/mathops.h ${BASEDIR}/prebuilt/$(get_target_build_directory)/ffmpeg/include/libavcodec/arm
+cp -f ${BASEDIR}/src/ffmpeg/libavformat/network.h ${BASEDIR}/prebuilt/$(get_target_build_directory)/ffmpeg/include/libavformat
+cp -f ${BASEDIR}/src/ffmpeg/libavformat/os_support.h ${BASEDIR}/prebuilt/$(get_target_build_directory)/ffmpeg/include/libavformat
+cp -f ${BASEDIR}/src/ffmpeg/libavformat/url.h ${BASEDIR}/prebuilt/$(get_target_build_directory)/ffmpeg/include/libavformat
+cp -f ${BASEDIR}/src/ffmpeg/libavutil/internal.h ${BASEDIR}/prebuilt/$(get_target_build_directory)/ffmpeg/include/libavutil
+cp -f ${BASEDIR}/src/ffmpeg/libavutil/libm.h ${BASEDIR}/prebuilt/$(get_target_build_directory)/ffmpeg/include/libavutil
+cp -f ${BASEDIR}/src/ffmpeg/libavutil/reverse.h ${BASEDIR}/prebuilt/$(get_target_build_directory)/ffmpeg/include/libavutil
+cp -f ${BASEDIR}/src/ffmpeg/libavutil/thread.h ${BASEDIR}/prebuilt/$(get_target_build_directory)/ffmpeg/include/libavutil
+cp -f ${BASEDIR}/src/ffmpeg/libavutil/timer.h ${BASEDIR}/prebuilt/$(get_target_build_directory)/ffmpeg/include/libavutil
+cp -f ${BASEDIR}/src/ffmpeg/libavutil/x86/asm.h ${BASEDIR}/prebuilt/$(get_target_build_directory)/ffmpeg/include/libavutil/x86
+cp -f ${BASEDIR}/src/ffmpeg/libavutil/x86/timer.h ${BASEDIR}/prebuilt/$(get_target_build_directory)/ffmpeg/include/libavutil/x86
+cp -f ${BASEDIR}/src/ffmpeg/libavutil/arm/timer.h ${BASEDIR}/prebuilt/$(get_target_build_directory)/ffmpeg/include/libavutil/arm
+cp -f ${BASEDIR}/src/ffmpeg/libavutil/aarch64/timer.h ${BASEDIR}/prebuilt/$(get_target_build_directory)/ffmpeg/include/libavutil/aarch64
+cp -f ${BASEDIR}/src/ffmpeg/libavutil/x86/emms.h ${BASEDIR}/prebuilt/$(get_target_build_directory)/ffmpeg/include/libavutil/x86
 
 if [ $? -eq 0 ]; then
     echo "ok"

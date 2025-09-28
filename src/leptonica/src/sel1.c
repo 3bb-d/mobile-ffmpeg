@@ -232,7 +232,7 @@ static const struct CompParameterMap  comp_parameter_map[] =
 /*!
  * \brief   selaCreate()
  *
- * \param[in]    n initial number of sel ptrs; use 0 for default
+ * \param[in]    n    initial number of sel ptrs; use 0 for default
  * \return  sela, or NULL on error
  */
 SELA *
@@ -265,7 +265,7 @@ SELA  *sela;
 /*!
  * \brief   selaDestroy()
  *
- * \param[in,out]   psela to be nulled
+ * \param[in,out]   psela    will be set to null before returning
  * \return  void
  */
 void
@@ -290,8 +290,9 @@ l_int32  i;
 /*!
  * \brief   selCreate()
  *
- * \param[in]    height, width
- * \param[in]    name [optional] sel name; can be null
+ * \param[in]    height
+ * \param[in]    width
+ * \param[in]    name      [optional] sel name; can be null
  * \return  sel, or NULL on error
  *
  * <pre>
@@ -330,7 +331,7 @@ SEL  *sel;
 /*!
  * \brief   selDestroy()
  *
- * \param[in,out]   psel to be nulled
+ * \param[in,out]   psel   will be set to null before returning
  * \return  void
  */
 void
@@ -404,9 +405,9 @@ SEL     *csel;
 /*!
  * \brief   selCreateBrick()
  *
- * \param[in]    h, w    height, width
- * \param[in]    cy, cx  origin, relative to UL corner at 0,0
- * \param[in]    type    SEL_HIT, SEL_MISS, or SEL_DONT_CARE
+ * \param[in]    h, w      height, width
+ * \param[in]    cy, cx    origin, relative to UL corner at 0,0
+ * \param[in]    type      SEL_HIT, SEL_MISS, or SEL_DONT_CARE
  * \return  sel, or NULL on error
  *
  * <pre>
@@ -445,9 +446,9 @@ SEL     *sel;
 /*!
  * \brief   selCreateComb()
  *
- * \param[in]    factor1 contiguous space between comb tines
- * \param[in]    factor2 number of comb tines
- * \param[in]    direction L_HORIZ, L_VERT
+ * \param[in]    factor1     contiguous space between comb tines
+ * \param[in]    factor2     number of comb tines
+ * \param[in]    direction   L_HORIZ, L_VERT
  * \return  sel, or NULL on error
  *
  * <pre>
@@ -500,8 +501,8 @@ SEL     *sel;
 /*!
  * \brief   create2dIntArray()
  *
- * \param[in]    sy rows == height
- * \param[in]    sx columns == width
+ * \param[in]    sy     rows == height
+ * \param[in]    sx     columns == width
  * \return  doubly indexed array i.e., an array of sy row pointers,
  *              each of which points to an array of sx ints
  *
@@ -548,10 +549,10 @@ l_int32  **array;
  * \brief   selaAddSel()
  *
  * \param[in]    sela
- * \param[in]    sel to be added
- * \param[in]    selname ignored if already defined in sel;
- *                       req'd in sel when added to a sela
- * \param[in]    copyflag  L_INSERT or L_COPY
+ * \param[in]    sel        to be added
+ * \param[in]    selname    ignored if already defined in sel;
+ *                          req'd in sel when added to a sela
+ * \param[in]    copyflag   L_INSERT or L_COPY
  * \return  0 if OK; 1 on error
  *
  * <pre>
@@ -562,7 +563,7 @@ l_int32  **array;
  *          selname if the sel already has a name.
  * </pre>
  */
-l_int32
+l_ok
 selaAddSel(SELA        *sela,
            SEL         *sel,
            const char  *selname,
@@ -651,7 +652,7 @@ selaGetCount(SELA  *sela)
  * \brief   selaGetSel()
  *
  * \param[in]    sela
- * \param[in]    i index of sel to be retrieved not copied
+ * \param[in]    i        index of sel to be retrieved not copied
  * \return  sel, or NULL on error
  *
  * <pre>
@@ -697,7 +698,7 @@ selGetName(SEL  *sel)
  * \brief   selSetName()
  *
  * \param[in]    sel
- * \param[in]    name [optional]; can be null
+ * \param[in]    name    [optional]; can be null
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -706,7 +707,7 @@ selGetName(SEL  *sel)
  *      (2) If name is not defined, just clears any existing sel name.
  * </pre>
  */
-l_int32
+l_ok
 selSetName(SEL         *sel,
            const char  *name)
 {
@@ -723,12 +724,12 @@ selSetName(SEL         *sel,
  * \brief   selaFindSelByName()
  *
  * \param[in]    sela
- * \param[in]    name sel name
- * \param[out]   pindex [optional]
- * \param[in]    psel   [optional] sel (not a copy)
+ * \param[in]    name      sel name
+ * \param[out]   pindex    [optional]
+ * \param[in]    psel      [optional] sel (not a copy)
  * \return  0 if OK; 1 on error
  */
-l_int32
+l_ok
 selaFindSelByName(SELA        *sela,
                   const char  *name,
                   l_int32     *pindex,
@@ -774,10 +775,10 @@ SEL     *sel;
  * \param[in]    sel
  * \param[in]    row
  * \param[in]    col
- * \param[out]   ptype  SEL_HIT, SEL_MISS, SEL_DONT_CARE
+ * \param[out]   ptype    SEL_HIT, SEL_MISS, SEL_DONT_CARE
  * \return  0 if OK; 1 on error
  */
-l_int32
+l_ok
 selGetElement(SEL      *sel,
               l_int32   row,
               l_int32   col,
@@ -806,7 +807,7 @@ selGetElement(SEL      *sel,
  * \param[in]    sel
  * \param[in]    row
  * \param[in]    col
- * \param[in]    type  SEL_HIT, SEL_MISS, SEL_DONT_CARE
+ * \param[in]    type    SEL_HIT, SEL_MISS, SEL_DONT_CARE
  * \return  0 if OK; 1 on error
  *
  * <pre>
@@ -817,7 +818,7 @@ selGetElement(SEL      *sel,
  *          direction of the rasterop.
  * </pre>
  */
-l_int32
+l_ok
 selSetElement(SEL     *sel,
               l_int32  row,
               l_int32  col,
@@ -843,10 +844,10 @@ selSetElement(SEL     *sel,
  * \brief   selGetParameters()
  *
  * \param[in]    sel
- * \param[out]   psy, psx, pcy, pcx [optional]  each can be null
+ * \param[out]   psy, psx, pcy, pcx    [optional] each can be null
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 selGetParameters(SEL      *sel,
                  l_int32  *psy,
                  l_int32  *psx,
@@ -876,7 +877,7 @@ selGetParameters(SEL      *sel,
  * \param[in]    cy, cx
  * \return  0 if OK; 1 on error
  */
-l_int32
+l_ok
 selSetOrigin(SEL     *sel,
              l_int32  cy,
              l_int32  cx)
@@ -895,10 +896,10 @@ selSetOrigin(SEL     *sel,
  * \brief   selGetTypeAtOrigin()
  *
  * \param[in]    sel
- * \param[out]   ptype  SEL_HIT, SEL_MISS, SEL_DONT_CARE
+ * \param[out]   ptype    SEL_HIT, SEL_MISS, SEL_DONT_CARE
  * \return  0 if OK; 1 on error or if origin is not found
  */
-l_int32
+l_ok
 selGetTypeAtOrigin(SEL      *sel,
                    l_int32  *ptype)
 {
@@ -930,7 +931,7 @@ l_int32  sx, sy, cx, cy, i, j;
  * \brief   selaGetBrickName()
  *
  * \param[in]    sela
- * \param[in]    hsize, vsize of brick sel
+ * \param[in]    hsize, vsize    of brick sel
  * \return  sel name new string, or NULL if no name or on error
  */
 char *
@@ -962,8 +963,8 @@ SEL     *sel;
  * \brief   selaGetCombName()
  *
  * \param[in]    sela
- * \param[in]    size the product of sizes of the brick and comb parts
- * \param[in]    direction L_HORIZ, L_VERT
+ * \param[in]    size        the product of sizes of the brick and comb parts
+ * \param[in]    direction   L_HORIZ, L_VERT
  * \return  sel name new string, or NULL if name not found or on error
  *
  * <pre>
@@ -1023,7 +1024,7 @@ static void selaComputeCompositeParameters(const char *fileout);
 /*!
  * \brief   selaComputeCompParameters()
  *
- * \param[in]    output filename
+ * \param[in]    fileout
  * \return  void
  *
  * <pre>
@@ -1086,12 +1087,12 @@ SELA    *selabasic, *selacomb;
  * \brief   getCompositeParameters()
  *
  * \param[in]    size
- * \param[out]   psize1 [optional] brick factor size
- * \param[out]   psize2 [optional] comb factor size
- * \param[out]   pnameh1 [optional] name of horiz brick
- * \param[out]   pnameh2 [optional] name of horiz comb
- * \param[out]   pnamev1 [optional] name of vert brick
- * \param[out]   pnamev2 [optional] name of vert comb
+ * \param[out]   psize1    [optional] brick factor size
+ * \param[out]   psize2    [optional] comb factor size
+ * \param[out]   pnameh1   [optional] name of horiz brick
+ * \param[out]   pnameh2   [optional] name of horiz comb
+ * \param[out]   pnamev1   [optional] name of vert brick
+ * \param[out]   pnamev2   [optional] name of vert comb
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -1100,7 +1101,7 @@ SELA    *selabasic, *selacomb;
  *      (2) All returned strings are copies that must be freed.
  * </pre>
  */
-l_int32
+l_ok
 getCompositeParameters(l_int32   size,
                        l_int32  *psize1,
                        l_int32  *psize2,
@@ -1179,7 +1180,7 @@ SARRAY  *sa;
  * \brief   selFindMaxTranslations()
  *
  * \param[in]    sel
- * \param[out]   pxp, pyp, pxn, pyn  max shifts
+ * \param[out]   pxp, pyp, pxn, pyn     max shifts
  * \return  0 if OK; 1 on error
  *
  * <pre>
@@ -1189,7 +1190,7 @@ SARRAY  *sa;
  *        is +x to the cx.  This is a positive xp shift.
  * </pre>
  */
-l_int32
+l_ok
 selFindMaxTranslations(SEL      *sel,
                        l_int32  *pxp,
                        l_int32  *pyp,
@@ -1236,7 +1237,7 @@ l_int32  maxxp, maxyp, maxxn, maxyn;
  * \brief   selRotateOrth()
  *
  * \param[in]    sel
- * \param[in]    quads 0 - 4; number of 90 degree cw rotations
+ * \param[in]    quads    0 - 4; number of 90 degree cw rotations
  * \return  seld, or NULL on error
  */
 SEL  *
@@ -1303,10 +1304,10 @@ SEL     *seld;
 /*!
  * \brief   selaRead()
  *
- * \param[in]    fname filename
+ * \param[in]    fname    filename
  * \return  sela, or NULL on error
  */
-SELA  *
+SELA *
 selaRead(const char  *fname)
 {
 FILE  *fp;
@@ -1332,7 +1333,7 @@ SELA  *sela;
 /*!
  * \brief   selaReadStream()
  *
- * \param[in]    fp file stream
+ * \param[in]    fp    file stream
  * \return  sela, or NULL on error
  */
 SELA  *
@@ -1373,7 +1374,7 @@ SELA    *sela;
 /*!
  * \brief   selRead()
  *
- * \param[in]    fname filename
+ * \param[in]    fname    filename
  * \return  sel, or NULL on error
  */
 SEL  *
@@ -1402,7 +1403,7 @@ SEL   *sel;
 /*!
  * \brief   selReadStream()
  *
- * \param[in]    fp file stream
+ * \param[in]    fp    file stream
  * \return  sel, or NULL on error
  */
 SEL  *
@@ -1456,11 +1457,11 @@ SEL     *sel;
 /*!
  * \brief   selaWrite()
  *
- * \param[in]    fname filename
+ * \param[in]    fname    filename
  * \param[in]    sela
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 selaWrite(const char  *fname,
           SELA        *sela)
 {
@@ -1485,11 +1486,11 @@ FILE  *fp;
 /*!
  * \brief   selaWriteStream()
  *
- * \param[in]    fp file stream
+ * \param[in]    fp    file stream
  * \param[in]    sela
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 selaWriteStream(FILE  *fp,
                 SELA  *sela)
 {
@@ -1518,11 +1519,11 @@ SEL     *sel;
 /*!
  * \brief   selWrite()
  *
- * \param[in]    fname filename
+ * \param[in]    fname    filename
  * \param[in]    sel
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 selWrite(const char  *fname,
          SEL         *sel)
 {
@@ -1547,11 +1548,11 @@ FILE  *fp;
 /*!
  * \brief   selWriteStream()
  *
- * \param[in]    fp file stream
+ * \param[in]    fp    file stream
  * \param[in]    sel
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 selWriteStream(FILE  *fp,
                SEL   *sel)
 {
@@ -1587,8 +1588,8 @@ l_int32  sx, sy, cx, cy, i, j;
  * \brief   selCreateFromString()
  *
  * \param[in]    text
- * \param[in]    h, w  height, width
- * \param[in]    name  [optional] sel name; can be null
+ * \param[in]    h, w    height, width
+ * \param[in]    name    [optional] sel name; can be null
  * \return  sel of the given size, or NULL on error
  *
  * <pre>
@@ -1630,7 +1631,7 @@ char     ch;
         return (SEL *)ERROR_PTR("height must be > 0", procName, NULL);
     if (w < 1)
         return (SEL *)ERROR_PTR("width must be > 0", procName, NULL);
-    if (strlen(text) != w * h)
+    if (strlen(text) != (size_t)w * h)
         return (SEL *)ERROR_PTR("text size != w * h", procName, NULL);
 
     sel = selCreate(h, w, name);
@@ -1850,8 +1851,8 @@ SELA    *sela;
  * \brief   selCreateFromSArray()
  *
  * \param[in]    sa
- * \param[in]    first line of sarray where Sel begins
- * \param[in]    last line of sarray where Sel ends
+ * \param[in]    first    line of sarray where Sel begins
+ * \param[in]    last     line of sarray where Sel ends
  * \return  sela, or NULL on error
  *
  * <pre>
@@ -1946,8 +1947,8 @@ SEL     *sel;
  * \brief   selCreateFromPta()
  *
  * \param[in]    pta
- * \param[in]    cy, cx origin of sel
- * \param[in]    name [optional] sel name; can be null
+ * \param[in]    cy, cx    origin of sel
+ * \param[in]    name      [optional] sel name; can be null
  * \return  sel of minimum required size, or NULL on error
  *
  * <pre>
@@ -1996,8 +1997,8 @@ SEL     *sel;
  * \brief   selCreateFromPix()
  *
  * \param[in]    pix
- * \param[in]    cy, cx origin of sel
- * \param[in]    name [optional] sel name; can be null
+ * \param[in]    cy, cx    origin of sel
+ * \param[in]    name      [optional] sel name; can be null
  * \return  sel, or NULL on error
  *
  * <pre>
@@ -2086,8 +2087,8 @@ char  *basename, *selname;
  *
  *  selCreateFromColorPix()
  *
- * \param[in]    pixs cmapped or rgb
- * \param[in]    selname [optional] sel name; can be null
+ * \param[in]    pixs      cmapped or rgb
+ * \param[in]    selname   [optional] sel name; can be null
  * \return  sel if OK, NULL on error
  *
  * <pre>
@@ -2106,8 +2107,8 @@ char  *basename, *selname;
  * </pre>
  */
 SEL *
-selCreateFromColorPix(PIX   *pixs,
-                      char  *selname)
+selCreateFromColorPix(PIX         *pixs,
+                      const char  *selname)
 {
 PIXCMAP  *cmap;
 SEL      *sel;
@@ -2182,8 +2183,8 @@ l_uint32  pixval;
  * \brief   selDisplayInPix()
  *
  * \param[in]    sel
- * \param[in]    size of grid interiors; odd; minimum size of 13 is enforced
- * \param[in]    gthick grid thickness; minimum size of 2 is enforced
+ * \param[in]    size     of grid interiors; odd; minimum size of 13 is enforced
+ * \param[in]    gthick   grid thickness; minimum size of 2 is enforced
  * \return  pix display of sel, or NULL on error
  *
  * <pre>
@@ -2300,10 +2301,10 @@ PTA     *pta1, *pta2, *pta1t, *pta2t;
  * \brief   selaDisplayInPix()
  *
  * \param[in]    sela
- * \param[in]    size of grid interiors; odd; minimum size of 13 is enforced
- * \param[in]    gthick grid thickness; minimum size of 2 is enforced
- * \param[in]    spacing between sels, both horizontally and vertically
- * \param[in]    ncols number of sels per "line"
+ * \param[in]    size     of grid interiors; odd; minimum size of 13 is enforced
+ * \param[in]    gthick   grid thickness; minimum size of 2 is enforced
+ * \param[in]    spacing  between sels, both horizontally and vertically
+ * \param[in]    ncols    number of sels per "line"
  * \return  pix display of all sels in sela, or NULL on error
  *
  * <pre>

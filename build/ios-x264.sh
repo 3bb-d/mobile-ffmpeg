@@ -5,11 +5,6 @@ if [[ -z ${ARCH} ]]; then
     exit 1
 fi
 
-if [[ -z ${IOS_MIN_VERSION} ]]; then
-    echo -e "(*) IOS_MIN_VERSION not defined\n"
-    exit 1
-fi
-
 if [[ -z ${TARGET_SDK} ]]; then
     echo -e "(*) TARGET_SDK not defined\n"
     exit 1
@@ -31,14 +26,18 @@ if ! [ -x "$(command -v tar)" ]; then
 fi
 
 # ENABLE COMMON FUNCTIONS
-. ${BASEDIR}/build/ios-common.sh
+if [[ ${APPLE_TVOS_BUILD} -eq 1 ]]; then
+    . ${BASEDIR}/build/tvos-common.sh
+else
+    . ${BASEDIR}/build/ios-common.sh
+fi
 
-# PREPARING PATHS & DEFINING ${INSTALL_PKG_CONFIG_DIR}
+# PREPARE PATHS & DEFINE ${INSTALL_PKG_CONFIG_DIR}
 LIB_NAME="x264"
 set_toolchain_clang_paths ${LIB_NAME}
 
 # PREPARING FLAGS
-TARGET_HOST=$(get_target_host)
+BUILD_HOST=$(get_build_host)
 export CFLAGS=$(get_cflags ${LIB_NAME})
 export CXXFLAGS=$(get_cxxflags ${LIB_NAME})
 export LDFLAGS=$(get_ldflags ${LIB_NAME})
@@ -47,8 +46,11 @@ cd ${BASEDIR}/src/${LIB_NAME} || exit 1
 
 make distclean 2>/dev/null 1>/dev/null
 
+ASM_FLAGS=""
 case ${ARCH} in
-    i386 |x86-64)
+    i386 | x86-64 | x86-64-mac-catalyst)
+        ASM_FLAGS="--disable-asm"
+
         if ! [ -x "$(command -v nasm)" ]; then
             echo -e "(*) nasm command not found\n"
             exit 1
@@ -58,18 +60,22 @@ case ${ARCH} in
     ;;
 esac
 
+# DISABLE INLINE -arch DEFINITIONS
+${SED_INLINE} 's/CFLAGS=\"\$CFLAGS \-arch x86_64/CFLAGS=\"\$CFLAGS/g' configure
+${SED_INLINE} 's/LDFLAGS=\"\$LDFLAGS \-arch x86_64/LDFLAGS=\"\$CFLAGS/g' configure
+
 ./configure \
-    --prefix=${BASEDIR}/prebuilt/ios-$(get_target_host)/${LIB_NAME} \
+    --prefix=${BASEDIR}/prebuilt/$(get_target_build_directory)/${LIB_NAME} \
     --enable-pic \
     --sysroot=${SDK_PATH} \
     --enable-static \
-    --enable-lto \
+    ${ASM_FLAGS} \
     --disable-cli \
-    --host=${TARGET_HOST} || exit 1
+    --host=${BUILD_HOST} || exit 1
 
-make ${MOBILE_FFMPEG_DEBUG} -j$(get_cpu_count) || exit 1
+make -j$(get_cpu_count) || exit 1
 
 # MANUALLY COPY PKG-CONFIG FILES
-cp x264.pc ${INSTALL_PKG_CONFIG_DIR}
+cp x264.pc ${INSTALL_PKG_CONFIG_DIR} || exit 1
 
 make install || exit 1

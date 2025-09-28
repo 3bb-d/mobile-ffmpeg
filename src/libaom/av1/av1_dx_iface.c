@@ -16,6 +16,7 @@
 #include "config/aom_version.h"
 
 #include "aom/internal/aom_codec_internal.h"
+#include "aom/internal/aom_image_internal.h"
 #include "aom/aomdx.h"
 #include "aom/aom_decoder.h"
 #include "aom_dsp/bitreader_buffer.h"
@@ -65,7 +66,9 @@ struct aom_codec_alg_priv {
   int num_frame_workers;
   int next_output_worker_id;
 
-  aom_image_t *image_with_grain[MAX_NUM_SPATIAL_LAYERS];
+  aom_image_t image_with_grain;
+  aom_codec_frame_buffer_t grain_image_frame_buffers[MAX_NUM_SPATIAL_LAYERS];
+  size_t num_grain_image_frame_buffers;
   int need_resync;  // wait for key/intra-only frame
   // BufferPool that holds all reference frames. Shared by all the FrameWorkers.
   BufferPool *buffer_pool;
@@ -98,14 +101,12 @@ static aom_codec_err_t decoder_init(aom_codec_ctx_t *ctx,
     priv->flushed = 0;
 
     // TODO(tdaede): this should not be exposed to the API
-    priv->cfg.allow_lowbitdepth = CONFIG_LOWBITDEPTH;
+    priv->cfg.allow_lowbitdepth = !FORCE_HIGHBITDEPTH_DECODING;
     if (ctx->config.dec) {
       priv->cfg = *ctx->config.dec;
       ctx->config.dec = &priv->cfg;
-      // default values
-      priv->cfg.cfg.ext_partition = 1;
     }
-    av1_zero(priv->image_with_grain);
+    priv->num_grain_image_frame_buffers = 0;
     // Turn row_mt on by default.
     priv->row_mt = 1;
 
@@ -141,16 +142,61 @@ static aom_codec_err_t decoder_destroy(aom_codec_alg_priv_t *ctx) {
   }
 
   if (ctx->buffer_pool) {
+    for (size_t i = 0; i < ctx->num_grain_image_frame_buffers; i++) {
+      ctx->buffer_pool->release_fb_cb(ctx->buffer_pool->cb_priv,
+                                      &ctx->grain_image_frame_buffers[i]);
+    }
     av1_free_ref_frame_buffers(ctx->buffer_pool);
     av1_free_internal_frame_buffers(&ctx->buffer_pool->int_frame_buffers);
   }
 
   aom_free(ctx->frame_workers);
   aom_free(ctx->buffer_pool);
-  for (int i = 0; i < MAX_NUM_SPATIAL_LAYERS; i++) {
-    if (ctx->image_with_grain[i]) aom_img_free(ctx->image_with_grain[i]);
-  }
+  aom_img_free(&ctx->img);
   aom_free(ctx);
+  return AOM_CODEC_OK;
+}
+
+static aom_codec_err_t parse_timing_info(struct aom_read_bit_buffer *rb) {
+  const uint32_t num_units_in_display_tick =
+      aom_rb_read_unsigned_literal(rb, 32);
+  const uint32_t time_scale = aom_rb_read_unsigned_literal(rb, 32);
+  if (num_units_in_display_tick == 0 || time_scale == 0)
+    return AOM_CODEC_UNSUP_BITSTREAM;
+  const uint8_t equal_picture_interval = aom_rb_read_bit(rb);
+  if (equal_picture_interval) {
+    const uint32_t num_ticks_per_picture_minus_1 = aom_rb_read_uvlc(rb);
+    if (num_ticks_per_picture_minus_1 == UINT32_MAX) {
+      // num_ticks_per_picture_minus_1 cannot be (1 << 32) − 1.
+      return AOM_CODEC_UNSUP_BITSTREAM;
+    }
+  }
+  return AOM_CODEC_OK;
+}
+
+static aom_codec_err_t parse_decoder_model_info(
+    struct aom_read_bit_buffer *rb, int *buffer_delay_length_minus_1) {
+  *buffer_delay_length_minus_1 = aom_rb_read_literal(rb, 5);
+  const uint32_t num_units_in_decoding_tick =
+      aom_rb_read_unsigned_literal(rb, 32);
+  const uint8_t buffer_removal_time_length_minus_1 = aom_rb_read_literal(rb, 5);
+  const uint8_t frame_presentation_time_length_minus_1 =
+      aom_rb_read_literal(rb, 5);
+  (void)num_units_in_decoding_tick;
+  (void)buffer_removal_time_length_minus_1;
+  (void)frame_presentation_time_length_minus_1;
+  return AOM_CODEC_OK;
+}
+
+static aom_codec_err_t parse_op_parameters_info(
+    struct aom_read_bit_buffer *rb, int buffer_delay_length_minus_1) {
+  const int n = buffer_delay_length_minus_1 + 1;
+  const uint32_t decoder_buffer_delay = aom_rb_read_unsigned_literal(rb, n);
+  const uint32_t encoder_buffer_delay = aom_rb_read_unsigned_literal(rb, n);
+  const uint8_t low_delay_mode_flag = aom_rb_read_bit(rb);
+  (void)decoder_buffer_delay;
+  (void)encoder_buffer_delay;
+  (void)low_delay_mode_flag;
   return AOM_CODEC_OK;
 }
 
@@ -161,10 +207,23 @@ static aom_codec_err_t parse_operating_points(struct aom_read_bit_buffer *rb,
                                               int is_reduced_header,
                                               aom_codec_stream_info_t *si) {
   int operating_point_idc0 = 0;
-
   if (is_reduced_header) {
     aom_rb_read_literal(rb, LEVEL_BITS);  // level
   } else {
+    uint8_t decoder_model_info_present_flag = 0;
+    int buffer_delay_length_minus_1 = 0;
+    aom_codec_err_t status;
+    const uint8_t timing_info_present_flag = aom_rb_read_bit(rb);
+    if (timing_info_present_flag) {
+      if ((status = parse_timing_info(rb)) != AOM_CODEC_OK) return status;
+      decoder_model_info_present_flag = aom_rb_read_bit(rb);
+      if (decoder_model_info_present_flag) {
+        if ((status = parse_decoder_model_info(
+                 rb, &buffer_delay_length_minus_1)) != AOM_CODEC_OK)
+          return status;
+      }
+    }
+    const uint8_t initial_display_delay_present_flag = aom_rb_read_bit(rb);
     const uint8_t operating_points_cnt_minus_1 =
         aom_rb_read_literal(rb, OP_POINTS_CNT_MINUS_1_BITS);
     for (int i = 0; i < operating_points_cnt_minus_1 + 1; i++) {
@@ -173,6 +232,20 @@ static aom_codec_err_t parse_operating_points(struct aom_read_bit_buffer *rb,
       if (i == 0) operating_point_idc0 = operating_point_idc;
       int seq_level_idx = aom_rb_read_literal(rb, LEVEL_BITS);  // level
       if (seq_level_idx > 7) aom_rb_read_bit(rb);               // tier
+      if (decoder_model_info_present_flag) {
+        const uint8_t decoder_model_present_for_this_op = aom_rb_read_bit(rb);
+        if (decoder_model_present_for_this_op) {
+          if ((status = parse_op_parameters_info(
+                   rb, buffer_delay_length_minus_1)) != AOM_CODEC_OK)
+            return status;
+        }
+      }
+      if (initial_display_delay_present_flag) {
+        const uint8_t initial_display_delay_present_for_this_op =
+            aom_rb_read_bit(rb);
+        if (initial_display_delay_present_for_this_op)
+          aom_rb_read_literal(rb, 4);  // initial_display_delay_minus_1
+      }
     }
   }
 
@@ -203,7 +276,7 @@ static aom_codec_err_t decoder_peek_si_internal(const uint8_t *data,
   memset(&obu_header, 0, sizeof(obu_header));
   size_t payload_size = 0;
   size_t bytes_read = 0;
-  int reduced_still_picture_hdr = 0;
+  uint8_t reduced_still_picture_hdr = 0;
   aom_codec_err_t status = aom_read_obu_header_and_size(
       data, data_sz, si->is_annexb, &obu_header, &payload_size, &bytes_read);
   if (status != AOM_CODEC_OK) return status;
@@ -232,7 +305,7 @@ static aom_codec_err_t decoder_peek_si_internal(const uint8_t *data,
       struct aom_read_bit_buffer rb = { data, data + data_sz, 0, NULL, NULL };
 
       av1_read_profile(&rb);  // profile
-      const int still_picture = aom_rb_read_bit(&rb);
+      const uint8_t still_picture = aom_rb_read_bit(&rb);
       reduced_still_picture_hdr = aom_rb_read_bit(&rb);
 
       if (!still_picture && reduced_still_picture_hdr) {
@@ -266,6 +339,8 @@ static aom_codec_err_t decoder_peek_si_internal(const uint8_t *data,
           if (frame_type == KEY_FRAME) {
             found_keyframe = 1;
             break;  // Stop here as no further OBUs will change the outcome.
+          } else if (frame_type == INTRA_ONLY_FRAME) {
+            intra_only_flag = 1;
           }
         }
       }
@@ -406,7 +481,6 @@ static aom_codec_err_t init_decoder(aom_codec_alg_priv_t *ctx) {
       set_error_detail(ctx, "Failed to allocate frame_worker_data");
       return AOM_CODEC_MEM_ERROR;
     }
-    frame_worker_data->pbi->common.options = &ctx->cfg.cfg;
     frame_worker_data->worker_id = i;
     frame_worker_data->frame_context_ready = 0;
     frame_worker_data->received_frame = 0;
@@ -506,6 +580,7 @@ static aom_codec_err_t decoder_inspect(aom_codec_alg_priv_t *ctx,
                                        void *user_priv) {
   aom_codec_err_t res = AOM_CODEC_OK;
 
+  const uint8_t *const data_end = data + data_sz;
   Av1DecodeReturn *data2 = (Av1DecodeReturn *)user_priv;
 
   if (ctx->frame_workers == NULL) {
@@ -523,6 +598,13 @@ static aom_codec_err_t decoder_inspect(aom_codec_alg_priv_t *ctx,
 
   if (ctx->frame_workers->had_error)
     return update_error_state(ctx, &frame_worker_data->pbi->common.error);
+
+  // Allow extra zero bytes after the frame end
+  while (data < data_end) {
+    const uint8_t marker = data[0];
+    if (marker) break;
+    ++data;
+  }
 
   data2->idx = -1;
   for (int i = 0; i < REF_FRAMES; ++i)
@@ -559,7 +641,14 @@ static aom_codec_err_t decoder_decode(aom_codec_alg_priv_t *ctx,
       }
       pbi->num_output_frames = 0;
     }
-    unlock_buffer_pool(ctx->buffer_pool);
+    unlock_buffer_pool(pool);
+    for (size_t j = 0; j < ctx->num_grain_image_frame_buffers; j++) {
+      pool->release_fb_cb(pool->cb_priv, &ctx->grain_image_frame_buffers[j]);
+      ctx->grain_image_frame_buffers[j].data = NULL;
+      ctx->grain_image_frame_buffers[j].size = 0;
+      ctx->grain_image_frame_buffers[j].priv = NULL;
+    }
+    ctx->num_grain_image_frame_buffers = 0;
   }
 
   /* Sanity checks */
@@ -627,45 +716,59 @@ static aom_codec_err_t decoder_decode(aom_codec_alg_priv_t *ctx,
   return res;
 }
 
+typedef struct {
+  BufferPool *pool;
+  aom_codec_frame_buffer_t *fb;
+} AllocCbParam;
+
+static void *AllocWithGetFrameBufferCb(void *priv, size_t size) {
+  AllocCbParam *param = (AllocCbParam *)priv;
+  if (param->pool->get_fb_cb(param->pool->cb_priv, size, param->fb) < 0)
+    return NULL;
+  if (param->fb->data == NULL || param->fb->size < size) return NULL;
+  return param->fb->data;
+}
+
 // If grain_params->apply_grain is false, returns img. Otherwise, adds film
-// grain to img, saves the result in *grain_img_ptr (allocating *grain_img_ptr
-// if necessary), and returns *grain_img_ptr.
-static aom_image_t *add_grain_if_needed(aom_image_t *img,
-                                        aom_image_t **grain_img_ptr,
+// grain to img, saves the result in grain_img, and returns grain_img.
+static aom_image_t *add_grain_if_needed(aom_codec_alg_priv_t *ctx,
+                                        aom_image_t *img,
+                                        aom_image_t *grain_img,
                                         aom_film_grain_t *grain_params) {
   if (!grain_params->apply_grain) return img;
-
-  aom_image_t *grain_img_buf = *grain_img_ptr;
 
   const int w_even = ALIGN_POWER_OF_TWO(img->d_w, 1);
   const int h_even = ALIGN_POWER_OF_TWO(img->d_h, 1);
 
-  if (grain_img_buf) {
-    const int alloc_w = ALIGN_POWER_OF_TWO(grain_img_buf->d_w, 1);
-    const int alloc_h = ALIGN_POWER_OF_TWO(grain_img_buf->d_h, 1);
-    if (w_even != alloc_w || h_even != alloc_h ||
-        img->fmt != grain_img_buf->fmt) {
-      aom_img_free(grain_img_buf);
-      grain_img_buf = NULL;
-      *grain_img_ptr = NULL;
-    }
-  }
-  if (!grain_img_buf) {
-    grain_img_buf = aom_img_alloc(NULL, img->fmt, w_even, h_even, 16);
-    *grain_img_ptr = grain_img_buf;
+  BufferPool *const pool = ctx->buffer_pool;
+  aom_codec_frame_buffer_t *fb =
+      &ctx->grain_image_frame_buffers[ctx->num_grain_image_frame_buffers];
+  AllocCbParam param;
+  param.pool = pool;
+  param.fb = fb;
+  if (!aom_img_alloc_with_cb(grain_img, img->fmt, w_even, h_even, 16,
+                             AllocWithGetFrameBufferCb, &param)) {
+    return NULL;
   }
 
-  if (grain_img_buf) {
-    grain_img_buf->user_priv = img->user_priv;
-    grain_img_buf->fb_priv = img->fb_priv;
-    if (av1_add_film_grain(grain_params, img, grain_img_buf)) {
-      aom_img_free(grain_img_buf);
-      grain_img_buf = NULL;
-      *grain_img_ptr = NULL;
-    }
+  grain_img->user_priv = img->user_priv;
+  grain_img->fb_priv = fb->priv;
+  if (av1_add_film_grain(grain_params, img, grain_img)) {
+    pool->release_fb_cb(pool->cb_priv, fb);
+    return NULL;
   }
 
-  return grain_img_buf;
+  ctx->num_grain_image_frame_buffers++;
+  return grain_img;
+}
+
+// Copies and clears the metadata from AV1Decoder.
+static void move_decoder_metadata_to_img(AV1Decoder *pbi, aom_image_t *img) {
+  if (pbi->metadata && img) {
+    assert(!img->metadata);
+    img->metadata = pbi->metadata;
+    pbi->metadata = NULL;
+  }
 }
 
 static aom_image_t *decoder_get_frame(aom_codec_alg_priv_t *ctx,
@@ -682,7 +785,6 @@ static aom_image_t *decoder_get_frame(aom_codec_alg_priv_t *ctx,
 
   if (ctx->frame_workers != NULL) {
     do {
-      YV12_BUFFER_CONFIG *sd;
       // NOTE(david.barker): This code does not support multiple worker threads
       // yet. We should probably move the iteration over threads into *iter
       // instead of using ctx->next_output_worker_id.
@@ -701,18 +803,22 @@ static aom_image_t *decoder_get_frame(aom_codec_alg_priv_t *ctx,
           frame_worker_data->received_frame = 0;
           check_resync(ctx, frame_worker_data->pbi);
         }
+        YV12_BUFFER_CONFIG *sd;
         aom_film_grain_t *grain_params;
         if (av1_get_raw_frame(frame_worker_data->pbi, *index, &sd,
                               &grain_params) == 0) {
           RefCntBuffer *const output_frame_buf = pbi->output_frames[*index];
           ctx->last_show_frame = output_frame_buf;
           if (ctx->need_resync) return NULL;
+          aom_img_remove_metadata(&ctx->img);
           yuvconfig2image(&ctx->img, sd, frame_worker_data->user_priv);
+          move_decoder_metadata_to_img(pbi, &ctx->img);
 
           if (!pbi->ext_tile_debug && cm->large_scale_tile) {
             *index += 1;  // Advance the iterator to point to the next image
-
+            aom_img_remove_metadata(&ctx->img);
             yuvconfig2image(&ctx->img, &pbi->tile_list_outbuf, NULL);
+            move_decoder_metadata_to_img(pbi, &ctx->img);
             img = &ctx->img;
             return img;
           }
@@ -762,7 +868,7 @@ static aom_image_t *decoder_get_frame(aom_codec_alg_priv_t *ctx,
           img->spatial_id = cm->spatial_layer_id;
           if (cm->skip_film_grain) grain_params->apply_grain = 0;
           aom_image_t *res = add_grain_if_needed(
-              img, &ctx->image_with_grain[*index], grain_params);
+              ctx, img, &ctx->image_with_grain, grain_params);
           if (!res) {
             aom_internal_error(&pbi->common.error, AOM_CODEC_CORRUPT_FRAME,
                                "Grain systhesis failed\n");

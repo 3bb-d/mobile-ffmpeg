@@ -58,7 +58,7 @@ static  l_uint32 expandtab16[] = {
 /*!
  * \brief   pixExpandBinaryReplicate()
  *
- * \param[in]    pixs 1 bpp
+ * \param[in]    pixs   1 bpp
  * \param[in]    xfact  integer scale factor for horiz. replicative expansion
  * \param[in]    yfact  integer scale factor for vertical replicative expansion
  * \return  pixd scaled up, or NULL on error
@@ -124,8 +124,8 @@ PIX       *pixd;
 /*!
  * \brief   pixExpandBinaryPower2()
  *
- * \param[in]    pixs 1 bpp
- * \param[in]    factor expansion factor: 1, 2, 4, 8, 16
+ * \param[in]    pixs      1 bpp
+ * \param[in]    factor    expansion factor: 1, 2, 4, 8, 16
  * \return  pixd expanded 1 bpp by replication, or NULL on error
  */
 PIX *
@@ -170,7 +170,7 @@ PIX       *pixd;
                 sval = GET_DATA_BYTE(lines, j);
                 SET_DATA_TWO_BYTES(lined, j, tab2[sval]);
             }
-            memcpy((char *)(lined + wpld), (char *)lined, 4 * wpld);
+            memcpy(lined + wpld, lined, 4 * wpld);
         }
         LEPT_FREE(tab2);
     } else if (factor == 4) {
@@ -184,7 +184,7 @@ PIX       *pixd;
                 lined[j] = tab4[sval];
             }
             for (k = 1; k < 4; k++)
-                memcpy((char *)(lined + k * wpld), (char *)lined, 4 * wpld);
+                memcpy(lined + k * wpld, lined, 4 * wpld);
         }
         LEPT_FREE(tab4);
     } else if (factor == 8) {
@@ -200,7 +200,7 @@ PIX       *pixd;
                 lined[j] = tab8[sval];
             }
             for (k = 1; k < 8; k++)
-                memcpy((char *)(lined + k * wpld), (char *)lined, 4 * wpld);
+                memcpy(lined + k * wpld, lined, 4 * wpld);
         }
         LEPT_FREE(tab8);
     } else {  /* factor == 16 */
@@ -213,7 +213,7 @@ PIX       *pixd;
                 lined[j] = expandtab16[sval];
             }
             for (k = 1; k < 16; k++)
-                memcpy((char *)(lined + k * wpld), (char *)lined, 4 * wpld);
+                memcpy(lined + k * wpld, lined, 4 * wpld);
         }
     }
 

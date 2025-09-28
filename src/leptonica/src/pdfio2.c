@@ -54,6 +54,7 @@
  *          L_COMP_DATA         *l_generateFlateData()
  *          static L_COMP_DATA  *pixGenerateFlateData()
  *          static L_COMP_DATA  *pixGenerateJpegData()
+ *          static L_COMP_DATA  *pixGenerateJp2kData()
  *          static L_COMP_DATA  *pixGenerateG4Data()
  *          L_COMP_DATA         *l_generateG4Data()
  *
@@ -106,6 +107,7 @@ static L_COMP_DATA  *l_generateJp2kData(const char *fname);
 static L_COMP_DATA  *pixGenerateFlateData(PIX *pixs, l_int32 ascii85flag);
 static L_COMP_DATA  *pixGenerateJpegData(PIX *pixs, l_int32 ascii85flag,
                                          l_int32 quality);
+static L_COMP_DATA  *pixGenerateJp2kData(PIX *pixs, l_int32 quality);
 static L_COMP_DATA  *pixGenerateG4Data(PIX *pixs, l_int32 ascii85flag);
 
 static l_int32       l_generatePdf(l_uint8 **pdata, size_t *pnbytes,
@@ -152,21 +154,23 @@ static l_int32   var_WRITE_DATE_AND_VERSION = 1;
 /*!
  * \brief   pixConvertToPdfData()
  *
- * \param[in]      pix all depths; cmap OK
- * \param[in]      type L_G4_ENCODE, L_JPEG_ENCODE, L_FLATE_ENCODE
- * \param[in]      quality used for JPEG only; 0 for default (75)
- * \param[out]     pdata pdf array
- * \param[out]     pnbytes number of bytes in pdf array
- * \param[in]      x, y location of lower-left corner of image, in pixels,
- *                      relative to the PostScript origin (0,0) at
- *                      the lower-left corner of the page)
- * \param[in]      res override the resolution of the input image, in ppi;
- *                     use 0 to respect the resolution embedded in the input
- * \param[in]      title [optional] pdf title
- * \param[in,out]  plpd ptr to lpd, which is created on the first invocation
- *                      and returned until last image is processed
- * \param[in]      position in image sequence: L_FIRST_IMAGE, L_NEXT_IMAGE,
- *                          L_LAST_IMAGE
+ * \param[in]      pix       all depths; cmap OK
+ * \param[in]      type      L_G4_ENCODE, L_JPEG_ENCODE, L_FLATE_ENCODE,
+ *                           L_JP2K_ENCODE
+ * \param[in]      quality   for jpeg: 1-100; 0 for default (75)
+ *                           for jp2k: 27-45; 0 for default (34)
+ * \param[out]     pdata     pdf array
+ * \param[out]     pnbytes   number of bytes in pdf array
+ * \param[in]      x, y      location of lower-left corner of image, in pixels,
+ *                           relative to the PostScript origin (0,0) at
+ *                           the lower-left corner of the page)
+ * \param[in]      res       override the resolution of the input image, in ppi;
+ *                           use 0 to respect resolution embedded in the input
+ * \param[in]      title     [optional] pdf title; can be null
+ * \param[in,out]  plpd      ptr to lpd; created on the first invocation and
+ *                           returned until last image is processed
+ * \param[in]      position  in image sequence: L_FIRST_IMAGE, L_NEXT_IMAGE,
+ *                           L_LAST_IMAGE
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -178,7 +182,7 @@ static l_int32   var_WRITE_DATE_AND_VERSION = 1;
  *      (3) See comments in convertToPdf().
  * </pre>
  */
-l_int32
+l_ok
 pixConvertToPdfData(PIX          *pix,
                     l_int32       type,
                     l_int32       quality,
@@ -272,10 +276,12 @@ L_PDF_DATA   *lpd = NULL;
 /*!
  * \brief   ptraConcatenatePdfToData()
  *
- * \param[in]    pa_data ptra array of pdf strings, each for a single-page pdf file
- * \param[in]    sa string array [optional] of pathnames for input pdf files
- * \param[out]   pdata concatenated pdf data in memory
- * \param[out]   pnbytes number of bytes in pdf data
+ * \param[in]    pa_data    ptra array of pdf strings, each for a
+ *                          single-page pdf file
+ * \param[in]    sa         [optional] string array of pathnames for
+ *                          input pdf files; can be null
+ * \param[out]   pdata      concatenated pdf data in memory
+ * \param[out]   pnbytes    number of bytes in pdf data
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -303,7 +309,7 @@ L_PDF_DATA   *lpd = NULL;
  *          this parent.
  * </pre>
  */
-l_int32
+l_ok
 ptraConcatenatePdfToData(L_PTRA    *pa_data,
                          SARRAY    *sa,
                          l_uint8  **pdata,
@@ -457,7 +463,7 @@ NUMAA    *naa_objs;  /* object mapping numbers to new values */
 /*!
  * \brief   convertTiffMultipageToPdf()
  *
- * \param[in]    filein   (tiff)
+ * \param[in]    filein    (tiff)
  * \param[in]    fileout   (pdf)
  * \return  0 if OK, 1 on error
  *
@@ -467,7 +473,7 @@ NUMAA    *naa_objs;  /* object mapping numbers to new values */
  *          convertTiffMultipageToPS()
  * </pre>
  */
-l_int32
+l_ok
 convertTiffMultipageToPdf(const char  *filein,
                           const char  *fileout)
 {
@@ -497,10 +503,11 @@ FILE    *fp;
 /*!
  * \brief   l_generateCIDataForPdf()
  *
- * \param[in]    fname [optional]; can be null
- * \param[in]    pix [optional]; can be null
- * \param[in]    quality for jpeg if transcoded; 75 is standard
- * \param[out]   pcid compressed data
+ * \param[in]    fname      [optional] can be null
+ * \param[in]    pix        [optional] can be null
+ * \param[in]    quality    for jpeg if transcoded: 1-100; 0 for default (75)
+ *                          for jp2k if transcoded: 27-45; 0 for default (34)
+ * \param[out]   pcid       compressed data
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -516,7 +523,7 @@ FILE    *fp;
  *          in the future.
  * </pre>
  */
-l_int32
+l_ok
 l_generateCIDataForPdf(const char    *fname,
                        PIX           *pix,
                        l_int32        quality,
@@ -579,8 +586,8 @@ PIX          *pixt;
 /*!
  * \brief   l_generateFlateDataPdf()
  *
- * \param[in]    fname preferably png
- * \param[in]    pixs [optional]; can be null
+ * \param[in]    fname     preferably png
+ * \param[in]    pixs      [optional] can be null
  * \return  cid containing png data, or NULL on error
  *
  * <pre>
@@ -623,21 +630,22 @@ PIXCMAP      *cmap = NULL;
     findFileFormat(fname, &format);
     spp = 0;  /* init to spp != 4 if not png */
     interlaced = 0;  /* initialize to no interlacing */
+    bps = 0;  /* initialize to a nonsense value */
     if (format == IFF_PNG) {
         isPngInterlaced(fname, &interlaced);
-        readHeaderPng(fname, NULL, NULL, NULL, &spp, NULL);
+        readHeaderPng(fname, NULL, NULL, &bps, &spp, NULL);
     }
 
         /* PDF is capable of inlining some types of PNG files, but not all
-           of them. We need to transcode anything with interlacing or an
-           alpha channel.
+           of them. We need to transcode anything with interlacing, an
+           alpha channel, or 1 bpp (which would otherwise be photo-inverted).
 
            Be careful with spp. Any PNG image file with an alpha
            channel is converted on reading to RGBA (spp == 4). This
            includes the (gray + alpha) format with spp == 2. You
            will get different results if you look at spp via
            readHeaderPng() versus pixGetSpp() */
-    if (format != IFF_PNG || interlaced || spp == 4 || spp == 2) {
+    if (format != IFF_PNG || interlaced || bps == 1 || spp == 4 || spp == 2) {
         if (!pixs)
             pix = pixRead(fname);
         else
@@ -705,14 +713,14 @@ PIXCMAP      *cmap = NULL;
         }
 
             /* Is it a data chunk? */
-        if (strncmp((const char *)(pngcomp + i - 4), "IDAT", 4) == 0) {
+        if (memcmp(pngcomp + i - 4, "IDAT", 4) == 0) {
             memcpy(datacomp + nbytescomp, pngcomp + i, n);
             nbytescomp += n;
         }
 
             /* Is it a palette chunk? */
         if (cmapflag && !cmap &&
-            strncmp((const char *)(pngcomp + i - 4), "PLTE", 4) == 0) {
+            memcmp(pngcomp + i - 4, "PLTE", 4) == 0) {
             if ((n / 3) > (1 << bps)) {
                 LEPT_FREE(pngcomp);
                 LEPT_FREE(datacomp);
@@ -777,8 +785,8 @@ PIXCMAP      *cmap = NULL;
 /*!
  * \brief   l_generateJpegData()
  *
- * \param[in]    fname of jpeg file
- * \param[in]    ascii85flag 0 for jpeg; 1 for ascii85-encoded jpeg
+ * \param[in]    fname           of jpeg file
+ * \param[in]    ascii85flag     0 for jpeg; 1 for ascii85-encoded jpeg
  * \return  cid containing jpeg data, or NULL on error
  *
  * <pre>
@@ -815,9 +823,9 @@ size_t        nbytes;
 /*!
  * \brief   l_generateJpegDataMem()
  *
- * \param[in]    data     of jpeg file
- * \param[in]    nbytes
- * \param[in]    ascii85flag 0 for jpeg; 1 for ascii85-encoded jpeg
+ * \param[in]    data           of jpeg file
+ * \param[in]    nbytes         of jpeg file
+ * \param[in]    ascii85flag    0 for jpeg; 1 for ascii85-encoded jpeg
  * \return  cid containing jpeg data, or NULL on error
  *
  * <pre>
@@ -876,7 +884,7 @@ L_COMP_DATA  *cid;
 /*!
  * \brief   l_generateJp2kData()
  *
- * \param[in]    fname of jp2k file
+ * \param[in]    fname     of jp2k file
  * \return  cid containing jp2k data, or NULL on error
  *
  * <pre>
@@ -887,9 +895,10 @@ L_COMP_DATA  *cid;
 static L_COMP_DATA *
 l_generateJp2kData(const char  *fname)
 {
-l_int32       w, h, bps, spp;
+l_int32       w, h, bps, spp, xres, yres;
 size_t        nbytes;
 L_COMP_DATA  *cid;
+FILE         *fp;
 
     PROCNAME("l_generateJp2kData");
 
@@ -906,13 +915,18 @@ L_COMP_DATA  *cid;
     }
 
     readHeaderJp2k(fname, &w, &h, &bps, &spp);
+    xres = yres = 0;
+    if ((fp = fopenReadStream(fname)) != NULL) {
+        fgetJp2kResolution(fp, &xres, &yres);
+        fclose(fp);
+    }
     cid->type = L_JP2K_ENCODE;
     cid->nbytescomp = nbytes;
     cid->w = w;
     cid->h = h;
     cid->bps = bps;
     cid->spp = spp;
-    cid->res = 0;  /* don't know how to extract this */
+    cid->res = xres;
     return cid;
 }
 
@@ -921,10 +935,12 @@ L_COMP_DATA  *cid;
  * \brief   l_generateCIData()
  *
  * \param[in]    fname
- * \param[in]    type L_G4_ENCODE, L_JPEG_ENCODE, L_FLATE_ENCODE, L_JP2K_ENCODE
- * \param[in]    quality used for jpeg only; 0 for default (75)
- * \param[in]    ascii85 0 for binary; 1 for ascii85-encoded
- * \param[out]   pcid compressed data
+ * \param[in]    type       L_G4_ENCODE, L_JPEG_ENCODE, L_FLATE_ENCODE,
+ *                          L_JP2K_ENCODE
+ * \param[in]    quality    for jpeg if transcoded: 1-100; 0 for default (75)
+ *                          for jp2k if transcoded: 27-45; 0 for default (34)
+ * \param[in]    ascii85    0 for binary; 1 for ascii85-encoded
+ * \param[out]   pcid       compressed data
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -939,7 +955,7 @@ L_COMP_DATA  *cid;
  *          the format and attempts to generate the CID without transcoding.
  * </pre>
  */
-l_int32
+l_ok
 l_generateCIData(const char    *fname,
                  l_int32        type,
                  l_int32        quality,
@@ -998,7 +1014,7 @@ PIX          *pix;
         } else {
             if ((pix = pixRead(fname)) == NULL)
                 return ERROR_INT("pix not returned", procName, 1);
-            cid = pixGenerateJpegData(pix, ascii85, quality);
+            cid = pixGenerateJp2kData(pix, quality);
             pixDestroy(&pix);
         }
         if (!cid)
@@ -1021,11 +1037,13 @@ PIX          *pix;
 /*!
  * \brief   pixGenerateCIData()
  *
- * \param[in]    pixs 8 or 32 bpp, no colormap
- * \param[in]    type L_G4_ENCODE, L_JPEG_ENCODE, L_FLATE_ENCODE
- * \param[in]    quality used for jpeg only; 0 for default (75)
- * \param[in]    ascii85 0 for binary; 1 for ascii85-encoded
- * \param[out]   pcid compressed data
+ * \param[in]    pixs       8 or 32 bpp, no colormap
+ * \param[in]    type       L_G4_ENCODE, L_JPEG_ENCODE, L_FLATE_ENCODE or
+ *                          L_JP2K_ENCODE
+ * \param[in]    quality    for jpeg if transcoded: 1-100; 0 for default (75)
+ *                          for jp2k if transcoded: 27-45; 0 for default (34)
+ * \param[in]    ascii85    0 for binary; 1 for ascii85-encoded
+ * \param[out]   pcid       compressed data
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -1035,7 +1053,7 @@ PIX          *pix;
  *           ~ 1 for ascii85 (5 for 4) encoded binary data
  * </pre>
  */
-l_int32
+l_ok
 pixGenerateCIData(PIX           *pixs,
                   l_int32        type,
                   l_int32        quality,
@@ -1053,7 +1071,7 @@ PIXCMAP  *cmap;
     if (!pixs)
         return ERROR_INT("pixs not defined", procName, 1);
     if (type != L_G4_ENCODE && type != L_JPEG_ENCODE &&
-        type != L_FLATE_ENCODE)
+        type != L_FLATE_ENCODE && type != L_JP2K_ENCODE)
         return ERROR_INT("invalid conversion type", procName, 1);
     if (ascii85 != 0 && ascii85 != 1)
         return ERROR_INT("invalid ascii85", procName, 1);
@@ -1064,7 +1082,7 @@ PIXCMAP  *cmap;
     if (cmap && type != L_FLATE_ENCODE) {
         L_WARNING("pixs has cmap; using flate encoding\n", procName);
         type = L_FLATE_ENCODE;
-    } else if (d < 8 && type == L_JPEG_ENCODE) {
+    } else if (d < 8 && (type == L_JPEG_ENCODE || type == L_JP2K_ENCODE)) {
         L_WARNING("pixs has < 8 bpp; using flate encoding\n", procName);
         type = L_FLATE_ENCODE;
     } else if (d > 1 && type == L_G4_ENCODE) {
@@ -1075,6 +1093,9 @@ PIXCMAP  *cmap;
     if (type == L_JPEG_ENCODE) {
         if ((*pcid = pixGenerateJpegData(pixs, ascii85, quality)) == NULL)
             return ERROR_INT("jpeg data not made", procName, 1);
+    } else if (type == L_JP2K_ENCODE) {
+        if ((*pcid = pixGenerateJp2kData(pixs, quality)) == NULL)
+            return ERROR_INT("jp2k data not made", procName, 1);
     } else if (type == L_G4_ENCODE) {
         if ((*pcid = pixGenerateG4Data(pixs, ascii85)) == NULL)
             return ERROR_INT("g4 data not made", procName, 1);
@@ -1093,7 +1114,7 @@ PIXCMAP  *cmap;
  * \brief   l_generateFlateData()
  *
  * \param[in]    fname
- * \param[in]    ascii85flag 0 for gzipped; 1 for ascii85-encoded gzipped
+ * \param[in]    ascii85flag    0 for gzipped; 1 for ascii85-encoded gzipped
  * \return  cid flate compressed image data, or NULL on error
  *
  * <pre>
@@ -1132,15 +1153,15 @@ PIX          *pixs;
  * \brief   pixGenerateFlateData()
  *
  * \param[in]    pixs
- * \param[in]    ascii85flag 0 for gzipped; 1 for ascii85-encoded gzipped
+ * \param[in]    ascii85flag 0    for gzipped; 1 for ascii85-encoded gzipped
  * \return  cid flate compressed image data, or NULL on error
  *
  *      Notes:
  *          1) This should not be called with an RGBA pix (spp == 4; it
- *              will ignore the alpha channel.  Likewise, if called with a
- *              colormapped pix, the alpha component in the colormap will
- *              be ignored as it is for all leptonica operations
- *              on colormapped pix.
+ *             will ignore the alpha channel.  Likewise, if called with a
+ *             colormapped pix, the alpha component in the colormap will
+ *             be ignored as it is for all leptonica operations
+ *             on colormapped pix.
  */
 static L_COMP_DATA *
 pixGenerateFlateData(PIX     *pixs,
@@ -1250,9 +1271,9 @@ PIXCMAP      *cmap;
 /*!
  * \brief   pixGenerateJpegData()
  *
- * \param[in]    pixs 8 or 32 bpp, no colormap
- * \param[in]    ascii85flag 0 for jpeg; 1 for ascii85-encoded jpeg
- * \param[in]    quality 0 for default, which is 75
+ * \param[in]    pixs           8 or 32 bpp, no colormap
+ * \param[in]    ascii85flag    0 for jpeg; 1 for ascii85-encoded jpeg
+ * \param[in]    quality        0 for default, which is 75
  * \return  cid jpeg compressed data, or NULL on error
  *
  * <pre>
@@ -1285,6 +1306,7 @@ L_COMP_DATA  *cid;
     fname = l_makeTempFilename();
     pixWriteJpeg(fname, pixs, quality, 0);
 
+        /* Generate the data */
     cid = l_generateJpegData(fname, ascii85flag);
     lept_rmfile(fname);
     LEPT_FREE(fname);
@@ -1293,10 +1315,55 @@ L_COMP_DATA  *cid;
 
 
 /*!
+ * \brief   pixGenerateJp2kData()
+ *
+ * \param[in]    pixs           8 or 32 bpp, no colormap
+ * \param[in]    quality        0 for default, which is 34
+ * \return  cid jp2k compressed data, or NULL on error
+ *
+ * <pre>
+ * Notes:
+ *      (1) The quality can be set between 27 (very poor) and 45
+ *          (nearly perfect).  Use 0 for default (34). Use 100 for lossless,
+ *          but this is very expensive and not recommended.
+ * </pre>
+ */
+static L_COMP_DATA *
+pixGenerateJp2kData(PIX     *pixs,
+                    l_int32  quality)
+{
+l_int32       d;
+char         *fname;
+L_COMP_DATA  *cid;
+
+    PROCNAME("pixGenerateJp2kData");
+
+    if (!pixs)
+        return (L_COMP_DATA *)ERROR_PTR("pixs not defined", procName, NULL);
+    if (pixGetColormap(pixs))
+        return (L_COMP_DATA *)ERROR_PTR("pixs has colormap", procName, NULL);
+    d = pixGetDepth(pixs);
+    if (d != 8 && d != 32)
+        return (L_COMP_DATA *)ERROR_PTR("pixs not 8 or 32 bpp", procName, NULL);
+
+        /* Compress to a temp jp2k file */
+    fname = l_makeTempFilename();
+    pixWriteJp2k(fname, pixs, quality, 5, 0, 0);
+
+        /* Generate the data */
+    cid = l_generateJp2kData(fname);
+    if (lept_rmfile(fname) != 0)
+        L_ERROR("temp file %s was not deleted\n", procName, fname);
+    LEPT_FREE(fname);
+    return cid;
+}
+
+
+/*!
  * \brief   pixGenerateG4Data()
  *
- * \param[in]    pixs 1 bpp
- * \param[in]    ascii85flag 0 for gzipped; 1 for ascii85-encoded gzipped
+ * \param[in]    pixs           1 bpp
+ * \param[in]    ascii85flag    0 for gzipped; 1 for ascii85-encoded gzipped
  * \return  cid g4 compressed image data, or NULL on error
  *
  * <pre>
@@ -1334,8 +1401,8 @@ L_COMP_DATA  *cid;
 /*!
  * \brief   l_generateG4Data()
  *
- * \param[in]    fname of g4 compressed file
- * \param[in]    ascii85flag 0 for g4 compressed; 1 for ascii85-encoded g4
+ * \param[in]    fname          of g4 compressed file
+ * \param[in]    ascii85flag    0 for g4 compressed; 1 for ascii85-encoded g4
  * \return  cid g4 compressed image data, or NULL on error
  *
  * <pre>
@@ -1411,10 +1478,10 @@ FILE         *fp;
 /*!
  * \brief   cidConvertToPdfData()
  *
- * \param[in]    cid compressed image data -- of jp2k image
- * \param[in]    title [optional] pdf title; can be NULL
- * \param[out]   pdata output pdf data for image
- * \param[out]   pnbytes size of output pdf data
+ * \param[in]    cid       compressed image data
+ * \param[in]    title     [optional] pdf title; can be NULL
+ * \param[out]   pdata     output pdf data for image
+ * \param[out]   pnbytes   size of output pdf data
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -1423,7 +1490,7 @@ FILE         *fp;
  *          lpd and destroyed by this function.
  * </pre>
  */
-l_int32
+l_ok
 cidConvertToPdfData(L_COMP_DATA  *cid,
                     const char   *title,
                     l_uint8     **pdata,
@@ -1469,7 +1536,7 @@ L_PDF_DATA  *lpd = NULL;
 /*!
  * \brief   l_CIDataDestroy()
  *
- * \param[in,out]   pcid will be set to null before returning
+ * \param[in,out]   pcid     will be set to null before returning
  * \return  void
  */
 void
@@ -1502,9 +1569,9 @@ L_COMP_DATA  *cid;
 /*!
  * \brief   l_generatePdf()
  *
- * \param[out]   pdata pdf array
- * \param[out]   pnbytes number of bytes in pdf array
- * \param[in]    lpd all the required input image data
+ * \param[out]   pdata     pdf array
+ * \param[out]   pnbytes   number of bytes in pdf array
+ * \param[in]    lpd       all the required input image data
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -1569,12 +1636,12 @@ SARRAY  *sa;
     l_dnaAddNumber(lpd->objsize, strlen(lpd->obj1));
 
     sa = sarrayCreate(0);
-    sarrayAddString(sa, (char *)"2 0 obj\n"
-                                 "<<\n", L_COPY);
+    sarrayAddString(sa, "2 0 obj\n"
+                        "<<\n", L_COPY);
     if (var_WRITE_DATE_AND_VERSION) {
         datestr = l_getFormattedDate();
         snprintf(buf, sizeof(buf), "/CreationDate (D:%s)\n", datestr);
-        sarrayAddString(sa, (char *)buf, L_COPY);
+        sarrayAddString(sa, buf, L_COPY);
         LEPT_FREE(datestr);
         version = getLeptonicaVersion();
         snprintf(buf, sizeof(buf),
@@ -1583,18 +1650,18 @@ SARRAY  *sa;
     } else {
         snprintf(buf, sizeof(buf), "/Producer (leptonica)\n");
     }
-    sarrayAddString(sa, (char *)buf, L_COPY);
+    sarrayAddString(sa, buf, L_COPY);
     if (lpd->title) {
         char *hexstr;
         if ((hexstr = generateEscapeString(lpd->title)) != NULL) {
             snprintf(buf, sizeof(buf), "/Title %s\n", hexstr);
-            sarrayAddString(sa, (char *)buf, L_COPY);
+            sarrayAddString(sa, buf, L_COPY);
         } else {
             L_ERROR("title string is not ascii\n", procName);
         }
         LEPT_FREE(hexstr);
     }
-    sarrayAddString(sa, (char *)">>\n"
+    sarrayAddString(sa, ">>\n"
                                 "endobj\n", L_COPY);
     lpd->obj2 = sarrayToString(sa, 0);
     l_dnaAddNumber(lpd->objsize, strlen(lpd->obj2));
@@ -1619,7 +1686,7 @@ SARRAY  *sa;
 /*!
  * \brief   generateEscapeString()
  *
- * \param[in]   str   input string
+ * \param[in]   str      input string
  * \return   hex escape string, or null on error
  *
  * <pre>
@@ -1631,6 +1698,7 @@ SARRAY  *sa;
  *          that the data is to be interpreted as big-endian, 4 bytes
  *          at a time.  For ascii, the first two bytes are 0 and the
  *          last two bytes are less than 0x80.
+ * </pre>
  */
 static char  *
 generateEscapeString(const char  *str)
@@ -2015,11 +2083,11 @@ SARRAY  *sa;
     snprintf(buf, sizeof(buf), "xref\n"
                                "0 %d\n"
                                "0000000000 65535 f \n", n);
-    sarrayAddString(sa, (char *)buf, L_COPY);
+    sarrayAddString(sa, buf, L_COPY);
     for (i = 1; i < n; i++) {
         l_dnaGetIValue(daloc, i, &linestart);
         snprintf(buf, sizeof(buf), "%010d 00000 n \n", linestart);
-        sarrayAddString(sa, (char *)buf, L_COPY);
+        sarrayAddString(sa, buf, L_COPY);
     }
 
     l_dnaGetIValue(daloc, n, &xrefloc);
@@ -2032,7 +2100,7 @@ SARRAY  *sa;
                                "startxref\n"
                                "%d\n"
                                "%%%%EOF\n", n, xrefloc);
-    sarrayAddString(sa, (char *)buf, L_COPY);
+    sarrayAddString(sa, buf, L_COPY);
     outstr = sarrayToString(sa, 0);
     sarrayDestroy(&sa);
     return outstr;
@@ -2042,9 +2110,9 @@ SARRAY  *sa;
 /*!
  * \brief   generateOutputDataPdf()
  *
- * \param[out]   pdata pdf data array
- * \param[out]   pnbytes size of pdf data array
- * \param[in]    lpd input data used to make pdf
+ * \param[out]   pdata      pdf data array
+ * \param[out]   pnbytes    size of pdf data array
+ * \param[in]    lpd        input data used to make pdf
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -2079,12 +2147,12 @@ L_COMP_DATA  *cid;
 
     sizes = l_dnaGetIArray(lpd->objsize);
     locs = l_dnaGetIArray(lpd->objloc);
-    memcpy((char *)data, lpd->id, sizes[0]);
-    memcpy((char *)(data + locs[1]), lpd->obj1, sizes[1]);
-    memcpy((char *)(data + locs[2]), lpd->obj2, sizes[2]);
-    memcpy((char *)(data + locs[3]), lpd->obj3, sizes[3]);
-    memcpy((char *)(data + locs[4]), lpd->obj4, sizes[4]);
-    memcpy((char *)(data + locs[5]), lpd->obj5, sizes[5]);
+    memcpy(data, lpd->id, sizes[0]);
+    memcpy(data + locs[1], lpd->obj1, sizes[1]);
+    memcpy(data + locs[2], lpd->obj2, sizes[2]);
+    memcpy(data + locs[3], lpd->obj3, sizes[3]);
+    memcpy(data + locs[4], lpd->obj4, sizes[4]);
+    memcpy(data + locs[5], lpd->obj5, sizes[5]);
 
         /* Each image has 3 parts: variable preamble, the compressed
          * data stream, and the fixed poststream. */
@@ -2097,21 +2165,21 @@ L_COMP_DATA  *cid;
         }
         str = sarrayGetString(lpd->saprex, i, L_NOCOPY);
         len = strlen(str);
-        memcpy((char *)(data + locs[6 + i]), str, len);
-        memcpy((char *)(data + locs[6 + i] + len),
-               (char *)cid->datacomp, cid->nbytescomp);
-        memcpy((char *)(data + locs[6 + i] + len + cid->nbytescomp),
+        memcpy(data + locs[6 + i], str, len);
+        memcpy(data + locs[6 + i] + len,
+               cid->datacomp, cid->nbytescomp);
+        memcpy(data + locs[6 + i] + len + cid->nbytescomp,
                lpd->poststream, strlen(lpd->poststream));
     }
 
         /* Each colormap is simply a stored string */
     for (i = 0; i < lpd->ncmap; i++) {
         str = sarrayGetString(lpd->sacmap, i, L_NOCOPY);
-        memcpy((char *)(data + locs[6 + nimages + i]), str, strlen(str));
+        memcpy(data + locs[6 + nimages + i], str, strlen(str));
     }
 
         /* And finally the trailer */
-    memcpy((char *)(data + lpd->xrefloc), lpd->trailer, strlen(lpd->trailer));
+    memcpy(data + lpd->xrefloc, lpd->trailer, strlen(lpd->trailer));
     LEPT_FREE(sizes);
     LEPT_FREE(locs);
     return 0;
@@ -2124,8 +2192,8 @@ L_COMP_DATA  *cid;
 /*!
  * \brief   parseTrailerPdf()
  *
- * \param[in]    bas lba of a pdf file
- * \param[out]   pda byte locations of the beginning of each object
+ * \param[in]    bas     lba of a pdf file
+ * \param[out]   pda     byte locations of the beginning of each object
  * \return  0 if OK, 1 on error
  */
 static l_int32
@@ -2148,7 +2216,7 @@ SARRAY   *sa;
     if (!bas)
         return ERROR_INT("bas not defined", procName, 1);
     data = l_byteaGetData(bas, &size);
-    if (strncmp((char *)data, "%PDF-1.", 7) != 0)
+    if (memcmp(data, "%PDF-1.", 7) != 0)
         return ERROR_INT("PDF header signature not found", procName, 1);
 
         /* Search for "startxref" starting 50 bytes from the EOF */
@@ -2267,17 +2335,19 @@ SARRAY  *sa;
 /*!
  * \brief   substituteObjectNumbers()
  *
- *  Input:  bas (lba of a pdf object)
- *          na_objs (object number mapping array)
- *  Return: bad (lba of rewritten pdf for the object)
+ * \param[in]   bas        lba of a pdf object
+ * \param[in]   na_objs    object number mapping array
+ * \return    bad   lba of rewritten pdf for the object
  *
- *  Notes:
+ * <pre>
+ * Notes:
  *      (1) Interpret the first set of bytes as the object number,
  *          map to the new number, and write it out.
  *      (2) Find all occurrences of this 4-byte sequence: " 0 R"
  *      (3) Find the location and value of the integer preceding this,
  *          and map it to the new value.
  *      (4) Rewrite the object with new object numbers.
+ * </pre>
  */
 static L_BYTEA *
 substituteObjectNumbers(L_BYTEA  *bas,
@@ -2422,8 +2492,8 @@ pdfdataGetCid(L_PDF_DATA  *lpd,
 /*!
  * \brief   l_pdfSetG4ImageMask()
  *
- * \param[in]    flag 1 for writing g4 data as fg only through a mask;
- *                    0 for writing fg and bg
+ * \param[in]    flag    1 for writing g4 data as fg only through a mask;
+ *                       0 for writing fg and bg
  * \return  void
  *
  * <pre>
@@ -2443,8 +2513,8 @@ l_pdfSetG4ImageMask(l_int32  flag)
 /*!
  * \brief   l_pdfSetDateAndVersion()
  *
- * \param[in]    flag 1 for writing date/time and leptonica version;
- *                    0 for omitting this from the metadata
+ * \param[in]    flag    1 for writing date/time and leptonica version;
+ *                       0 for omitting this from the metadata
  * \return  void
  *
  * <pre>

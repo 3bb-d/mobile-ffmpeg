@@ -28,8 +28,12 @@
  * \file fpix1.c
  * <pre>
  *
- *    This file has basic constructors, destructors and field accessors
- *    for FPix, FPixa and DPix.  It also has uncompressed read/write.
+ *    ---------------------------------------------------
+ *    This file has these FPix, FPixa and DPix utilities:
+ *         - creation and destruction
+ *         - accessors
+ *         - serialization and deserialization
+ *    ---------------------------------------------------
  *
  *    FPix Create/copy/destroy
  *          FPIX          *fpixCreate()
@@ -172,7 +176,7 @@ FPIX       *fpixd;
     fpixSetWpl(fpixd, width);  /* 4-byte words */
     fpixd->refcount = 1;
 
-    data = (l_float32 *)LEPT_CALLOC(width * height, sizeof(l_float32));
+    data = (l_float32 *)LEPT_CALLOC((size_t)width * height, sizeof(l_float32));
     if (!data) {
         fpixDestroy(&fpixd);
         return (FPIX *)ERROR_PTR("calloc fail for data", procName, NULL);
@@ -241,8 +245,8 @@ fpixClone(FPIX  *fpix)
 /*!
  * \brief   fpixCopy()
  *
- * \param[in]    fpixd [optional]; can be null, or equal to fpixs,
- *                    or different from fpixs
+ * \param[in]    fpixd    [optional] can be null, or equal to fpixs,
+ *                        or different from fpixs
  * \param[in]    fpixs
  * \return  fpixd, or NULL on error
  *
@@ -292,7 +296,7 @@ l_float32  *datas, *datad;
             return (FPIX *)ERROR_PTR("fpixd not made", procName, NULL);
         datas = fpixGetData(fpixs);
         datad = fpixGetData(fpixd);
-        memcpy((char *)datad, (char *)datas, bytes);
+        memcpy(datad, datas, bytes);
         return fpixd;
     }
 
@@ -303,7 +307,7 @@ l_float32  *datas, *datad;
     fpixCopyResolution(fpixd, fpixs);
     datas = fpixGetData(fpixs);
     datad = fpixGetData(fpixd);
-    memcpy((char*)datad, (char*)datas, bytes);
+    memcpy(datad, datas, bytes);
     return fpixd;
 }
 
@@ -322,7 +326,7 @@ l_float32  *datas, *datad;
  *          doesn't do anything.
  * </pre>
  */
-l_int32
+l_ok
 fpixResizeImageData(FPIX  *fpixd,
                     FPIX  *fpixs)
 {
@@ -356,7 +360,7 @@ l_float32  *data;
 /*!
  * \brief   fpixDestroy()
  *
- * \param[in,out]   pfpix will be nulled
+ * \param[in,out]   pfpix    will be set to null before returning
  * \return  void
  *
  * <pre>
@@ -401,10 +405,10 @@ FPIX       *fpix;
  * \brief   fpixGetDimensions()
  *
  * \param[in]    fpix
- * \param[out]   pw, ph [optional]  each can be null
+ * \param[out]   pw, ph    [optional] each can be null
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 fpixGetDimensions(FPIX     *fpix,
                   l_int32  *pw,
                   l_int32  *ph)
@@ -430,7 +434,7 @@ fpixGetDimensions(FPIX     *fpix,
  * \param[in]    w, h
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 fpixSetDimensions(FPIX     *fpix,
                   l_int32   w,
                   l_int32   h)
@@ -469,7 +473,7 @@ fpixGetWpl(FPIX  *fpix)
  * \param[in]    wpl
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 fpixSetWpl(FPIX    *fpix,
            l_int32  wpl)
 {
@@ -507,7 +511,7 @@ fpixGetRefcount(FPIX  *fpix)
  * \param[in]    delta
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 fpixChangeRefcount(FPIX    *fpix,
                    l_int32  delta)
 {
@@ -525,10 +529,10 @@ fpixChangeRefcount(FPIX    *fpix,
  * \brief   fpixGetResolution()
  *
  * \param[in]    fpix
- * \param[out]   pxres, pyres [optional] x and y resolution
+ * \param[out]   pxres, pyres     [optional] x and y resolution
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 fpixGetResolution(FPIX     *fpix,
                   l_int32  *pxres,
                   l_int32  *pyres)
@@ -547,10 +551,10 @@ fpixGetResolution(FPIX     *fpix,
  * \brief   fpixSetResolution()
  *
  * \param[in]    fpix
- * \param[in]    xres, yres x and y resolution
+ * \param[in]    xres, yres     x and y resolution
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 fpixSetResolution(FPIX    *fpix,
                   l_int32  xres,
                   l_int32  yres)
@@ -572,7 +576,7 @@ fpixSetResolution(FPIX    *fpix,
  * \param[in]    fpixd, fpixs
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 fpixCopyResolution(FPIX  *fpixd,
                    FPIX  *fpixs)
 {
@@ -592,7 +596,7 @@ l_int32  xres, yres;
  * \brief   fpixGetData()
  *
  * \param[in]    fpix
- * \return  ptr FPix::data, or NULL on error
+ * \return  ptr to fpix data, or NULL on error
  */
 l_float32 *
 fpixGetData(FPIX  *fpix)
@@ -612,7 +616,7 @@ fpixGetData(FPIX  *fpix)
  * \param[in]    data
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 fpixSetData(FPIX       *fpix,
             l_float32  *data)
 {
@@ -630,11 +634,15 @@ fpixSetData(FPIX       *fpix,
  * \brief   fpixGetPixel()
  *
  * \param[in]    fpix
- * \param[in]    x,y pixel coords
- * \param[out]   pval pixel value
- * \return  0 if OK; 1 on error
+ * \param[in]    x,y     pixel coords
+ * \param[out]   pval    pixel value
+ * \return  0 if OK; 1 or 2 on error
+ *
+ * Notes:
+ *      (1) If the point is outside the image, this returns an error (2),
+ *          with 0.0 in %pval.  To avoid spamming output, it fails silently.
  */
-l_int32
+l_ok
 fpixGetPixel(FPIX       *fpix,
              l_int32     x,
              l_int32     y,
@@ -651,10 +659,8 @@ l_int32  w, h;
         return ERROR_INT("fpix not defined", procName, 1);
 
     fpixGetDimensions(fpix, &w, &h);
-    if (x < 0 || x >= w)
-        return ERROR_INT("x out of bounds", procName, 1);
-    if (y < 0 || y >= h)
-        return ERROR_INT("y out of bounds", procName, 1);
+    if (x < 0 || x >= w || y < 0 || y >= h)
+        return 2;
 
     *pval = *(fpix->data + y * w + x);
     return 0;
@@ -665,11 +671,15 @@ l_int32  w, h;
  * \brief   fpixSetPixel()
  *
  * \param[in]    fpix
- * \param[in]    x,y pixel coords
- * \param[in]    val pixel value
- * \return  0 if OK; 1 on error
+ * \param[in]    x,y    pixel coords
+ * \param[in]    val    pixel value
+ * \return  0 if OK; 1 or 2 on error
+ *
+ * Notes:
+ *      (1) If the point is outside the image, this returns an error (2),
+ *          with 0.0 in %pval.  To avoid spamming output, it fails silently.
  */
-l_int32
+l_ok
 fpixSetPixel(FPIX      *fpix,
              l_int32    x,
              l_int32    y,
@@ -683,10 +693,8 @@ l_int32  w, h;
         return ERROR_INT("fpix not defined", procName, 1);
 
     fpixGetDimensions(fpix, &w, &h);
-    if (x < 0 || x >= w)
-        return ERROR_INT("x out of bounds", procName, 1);
-    if (y < 0 || y >= h)
-        return ERROR_INT("y out of bounds", procName, 1);
+    if (x < 0 || x >= w || y < 0 || y >= h)
+        return 2;
 
     *(fpix->data + y * w + x) = val;
     return 0;
@@ -699,7 +707,7 @@ l_int32  w, h;
 /*!
  * \brief   fpixaCreate()
  *
- * \param[in]    n  initial number of ptrs
+ * \param[in]    n     initial number of ptrs
  * \return  fpixa, or NULL on error
  */
 FPIXA *
@@ -731,7 +739,7 @@ FPIXA  *fpixa;
  * \brief   fpixaCopy()
  *
  * \param[in]    fpixa
- * \param[in]    copyflag L_COPY, L_CLODE or L_COPY_CLONE
+ * \param[in]    copyflag     L_COPY, L_CLODE or L_COPY_CLONE
  * \return  new fpixa, or NULL on error
  *
  * <pre>
@@ -780,7 +788,7 @@ FPIXA   *fpixac;
 /*!
  * \brief   fpixaDestroy()
  *
- * \param[in,out]   pfpixa to be nulled
+ * \param[in,out]   pfpixa    will be set to null before returning
  * \return  void
  *
  * <pre>
@@ -826,11 +834,11 @@ FPIXA   *fpixa;
  * \brief   fpixaAddFPix()
  *
  * \param[in]    fpixa
- * \param[in]    fpix  to be added
- * \param[in]    copyflag L_INSERT, L_COPY, L_CLONE
+ * \param[in]    fpix        to be added
+ * \param[in]    copyflag    L_INSERT, L_COPY, L_CLONE
  * \return  0 if OK; 1 on error
  */
-l_int32
+l_ok
 fpixaAddFPix(FPIXA   *fpixa,
              FPIX    *fpix,
              l_int32  copyflag)
@@ -893,7 +901,7 @@ fpixaExtendArray(FPIXA  *fpixa)
  * \brief   fpixaExtendArrayToSize()
  *
  * \param[in]    fpixa
- * \param[in]    size new size
+ * \param[in]    size      new ptr array size
  * \return  0 if OK; 1 on error
  *
  * <pre>
@@ -949,7 +957,7 @@ fpixaGetCount(FPIXA  *fpixa)
  * \param[in]    delta
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 fpixaChangeRefcount(FPIXA   *fpixa,
                     l_int32  delta)
 {
@@ -967,8 +975,8 @@ fpixaChangeRefcount(FPIXA   *fpixa,
  * \brief   fpixaGetFPix()
  *
  * \param[in]    fpixa
- * \param[in]    index  to the index-th fpix
- * \param[in]    accesstype  L_COPY or L_CLONE
+ * \param[in]    index        to the index-th fpix
+ * \param[in]    accesstype   L_COPY or L_CLONE
  * \return  fpix, or NULL on error
  */
 FPIX *
@@ -996,11 +1004,11 @@ fpixaGetFPix(FPIXA   *fpixa,
  * \brief   fpixaGetFPixDimensions()
  *
  * \param[in]    fpixa
- * \param[in]    index  to the index-th box
- * \param[out]   pw, ph [optional]  each can be null
+ * \param[in]    index      to the index-th box
+ * \param[out]   pw, ph     [optional] each can be null
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 fpixaGetFPixDimensions(FPIXA    *fpixa,
                        l_int32   index,
                        l_int32  *pw,
@@ -1031,7 +1039,7 @@ FPIX  *fpix;
  * \brief   fpixaGetData()
  *
  * \param[in]    fpixa
- * \param[in]    index into fpixa array
+ * \param[in]    index     into fpixa array
  * \return  data not a copy, or NULL on error
  */
 l_float32 *
@@ -1061,12 +1069,12 @@ FPIX       *fpix;
  * \brief   fpixaGetPixel()
  *
  * \param[in]    fpixa
- * \param[in]    index into fpixa array
- * \param[in]    x,y pixel coords
- * \param[out]   pval pixel value
+ * \param[in]    index     into fpixa array
+ * \param[in]    x,y       pixel coords
+ * \param[out]   pval      pixel value
  * \return  0 if OK; 1 on error
  */
-l_int32
+l_ok
 fpixaGetPixel(FPIXA      *fpixa,
               l_int32     index,
               l_int32     x,
@@ -1098,12 +1106,12 @@ FPIX    *fpix;
  * \brief   fpixaSetPixel()
  *
  * \param[in]    fpixa
- * \param[in]    index into fpixa array
- * \param[in]    x,y pixel coords
- * \param[in]    val pixel value
+ * \param[in]    index    into fpixa array
+ * \param[in]    x,y      pixel coords
+ * \param[in]    val      pixel value
  * \return  0 if OK; 1 on error
  */
-l_int32
+l_ok
 fpixaSetPixel(FPIXA     *fpixa,
               l_int32    index,
               l_int32    x,
@@ -1171,7 +1179,7 @@ DPIX       *dpix;
     dpixSetWpl(dpix, width);  /* 8 byte words */
     dpix->refcount = 1;
 
-    data = (l_float64 *)LEPT_CALLOC(width * height, sizeof(l_float64));
+    data = (l_float64 *)LEPT_CALLOC((size_t)width * height, sizeof(l_float64));
     if (!data) {
         dpixDestroy(&dpix);
         return (DPIX *)ERROR_PTR("calloc fail for data", procName, NULL);
@@ -1239,8 +1247,8 @@ dpixClone(DPIX  *dpix)
 /*!
  * \brief   dpixCopy()
  *
- * \param[in]    dpixd [optional]; can be null, or equal to dpixs,
- *                    or different from dpixs
+ * \param[in]    dpixd    [optional] can be null, or equal to dpixs,
+ *                        or different from dpixs
  * \param[in]    dpixs
  * \return  dpixd, or NULL on error
  *
@@ -1290,7 +1298,7 @@ l_float64  *datas, *datad;
             return (DPIX *)ERROR_PTR("dpixd not made", procName, NULL);
         datas = dpixGetData(dpixs);
         datad = dpixGetData(dpixd);
-        memcpy((char *)datad, (char *)datas, bytes);
+        memcpy(datad, datas, bytes);
         return dpixd;
     }
 
@@ -1301,7 +1309,7 @@ l_float64  *datas, *datad;
     dpixCopyResolution(dpixd, dpixs);
     datas = dpixGetData(dpixs);
     datad = dpixGetData(dpixd);
-    memcpy((char*)datad, (char*)datas, bytes);
+    memcpy(datad, datas, bytes);
     return dpixd;
 }
 
@@ -1312,7 +1320,7 @@ l_float64  *datas, *datad;
  * \param[in]    dpixd, dpixs
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 dpixResizeImageData(DPIX  *dpixd,
                     DPIX  *dpixs)
 {
@@ -1346,7 +1354,7 @@ l_float64  *data;
 /*!
  * \brief   dpixDestroy()
  *
- * \param[in,out]   pdpix will be nulled
+ * \param[in,out]   pdpix    will be set to null before returning
  * \return  void
  *
  * <pre>
@@ -1391,10 +1399,10 @@ DPIX       *dpix;
  * \brief   dpixGetDimensions()
  *
  * \param[in]    dpix
- * \param[out]   pw, ph [optional]  each can be null
+ * \param[out]   pw, ph     [optional] each can be null
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 dpixGetDimensions(DPIX     *dpix,
                   l_int32  *pw,
                   l_int32  *ph)
@@ -1420,7 +1428,7 @@ dpixGetDimensions(DPIX     *dpix,
  * \param[in]    w, h
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 dpixSetDimensions(DPIX     *dpix,
                   l_int32   w,
                   l_int32   h)
@@ -1459,7 +1467,7 @@ dpixGetWpl(DPIX  *dpix)
  * \param[in]    wpl
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 dpixSetWpl(DPIX    *dpix,
            l_int32  wpl)
 {
@@ -1497,7 +1505,7 @@ dpixGetRefcount(DPIX  *dpix)
  * \param[in]    delta
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 dpixChangeRefcount(DPIX    *dpix,
                    l_int32  delta)
 {
@@ -1515,10 +1523,10 @@ dpixChangeRefcount(DPIX    *dpix,
  * \brief   dpixGetResolution()
  *
  * \param[in]    dpix
- * \param[out]   pxres, pyres [optional] x and y resolution
+ * \param[out]   pxres, pyres    [optional] x and y resolution
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 dpixGetResolution(DPIX     *dpix,
                   l_int32  *pxres,
                   l_int32  *pyres)
@@ -1537,10 +1545,10 @@ dpixGetResolution(DPIX     *dpix,
  * \brief   dpixSetResolution()
  *
  * \param[in]    dpix
- * \param[in]    xres, yres x and y resolution
+ * \param[in]    xres, yres     x and y resolution
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 dpixSetResolution(DPIX    *dpix,
                   l_int32  xres,
                   l_int32  yres)
@@ -1562,7 +1570,7 @@ dpixSetResolution(DPIX    *dpix,
  * \param[in]    dpixd, dpixs
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 dpixCopyResolution(DPIX  *dpixd,
                    DPIX  *dpixs)
 {
@@ -1582,7 +1590,7 @@ l_int32  xres, yres;
  * \brief   dpixGetData()
  *
  * \param[in]    dpix
- * \return  ptr DPix::data, or NULL on error
+ * \return  ptr to dpix data, or NULL on error
  */
 l_float64 *
 dpixGetData(DPIX  *dpix)
@@ -1602,7 +1610,7 @@ dpixGetData(DPIX  *dpix)
  * \param[in]    data
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 dpixSetData(DPIX       *dpix,
             l_float64  *data)
 {
@@ -1620,11 +1628,15 @@ dpixSetData(DPIX       *dpix,
  * \brief   dpixGetPixel()
  *
  * \param[in]    dpix
- * \param[in]    x,y pixel coords
- * \param[out]   pval pixel value
- * \return  0 if OK; 1 on error
+ * \param[in]    x,y     pixel coords
+ * \param[out]   pval    pixel value
+ * \return  0 if OK; 1 or 2 on error
+ *
+ * Notes:
+ *      (1) If the point is outside the image, this returns an error (2),
+ *          with 0.0 in %pval.  To avoid spamming output, it fails silently.
  */
-l_int32
+l_ok
 dpixGetPixel(DPIX       *dpix,
              l_int32     x,
              l_int32     y,
@@ -1641,10 +1653,8 @@ l_int32  w, h;
         return ERROR_INT("dpix not defined", procName, 1);
 
     dpixGetDimensions(dpix, &w, &h);
-    if (x < 0 || x >= w)
-        return ERROR_INT("x out of bounds", procName, 1);
-    if (y < 0 || y >= h)
-        return ERROR_INT("y out of bounds", procName, 1);
+    if (x < 0 || x >= w || y < 0 || y >= h)
+        return 2;
 
     *pval = *(dpix->data + y * w + x);
     return 0;
@@ -1655,11 +1665,15 @@ l_int32  w, h;
  * \brief   dpixSetPixel()
  *
  * \param[in]    dpix
- * \param[in]    x,y pixel coords
- * \param[in]    val pixel value
- * \return  0 if OK; 1 on error
+ * \param[in]    x,y    pixel coords
+ * \param[in]    val    pixel value
+ * \return  0 if OK; 1 or 2 on error
+ *
+ * Notes:
+ *      (1) If the point is outside the image, this returns an error (2),
+ *          with 0.0 in %pval.  To avoid spamming output, it fails silently.
  */
-l_int32
+l_ok
 dpixSetPixel(DPIX      *dpix,
              l_int32    x,
              l_int32    y,
@@ -1673,10 +1687,8 @@ l_int32  w, h;
         return ERROR_INT("dpix not defined", procName, 1);
 
     dpixGetDimensions(dpix, &w, &h);
-    if (x < 0 || x >= w)
-        return ERROR_INT("x out of bounds", procName, 1);
-    if (y < 0 || y >= h)
-        return ERROR_INT("y out of bounds", procName, 1);
+    if (x < 0 || x >= w || y < 0 || y >= h)
+        return 2;
 
     *(dpix->data + y * w + x) = val;
     return 0;
@@ -1716,7 +1728,7 @@ FPIX  *fpix;
 /*!
  * \brief   fpixReadStream()
  *
- * \param[in]    fp file stream
+ * \param[in]    fp     file stream
  * \return  fpix, or NULL on error
  */
 FPIX *
@@ -1768,8 +1780,8 @@ FPIX       *fpix;
 /*!
  * \brief   fpixReadMem()
  *
- * \param[in]    data  of serialized fpix
- * \param[in]    size  of data in bytes
+ * \param[in]    data    of serialized fpix
+ * \param[in]    size    of data in bytes
  * \return  fpix, or NULL on error
  */
 FPIX *
@@ -1800,7 +1812,7 @@ FPIX  *fpix;
  * \param[in]    fpix
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 fpixWrite(const char  *filename,
           FPIX        *fpix)
 {
@@ -1827,15 +1839,16 @@ FILE    *fp;
 /*!
  * \brief   fpixWriteStream()
  *
- * \param[in]    fp file stream opened for "wb"
+ * \param[in]    fp       file stream opened for "wb"
  * \param[in]    fpix
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 fpixWriteStream(FILE  *fp,
                 FPIX  *fpix)
 {
-l_int32     w, h, nbytes, xres, yres;
+l_int32     w, h, xres, yres;
+l_uint32    nbytes;
 l_float32  *data;
 FPIX       *fpixt;
 
@@ -1851,10 +1864,10 @@ FPIX       *fpixt;
 
     fpixGetDimensions(fpixt, &w, &h);
     data = fpixGetData(fpixt);
-    nbytes = w * h * sizeof(l_float32);
+    nbytes = sizeof(l_float32) * w * h;
     fpixGetResolution(fpixt, &xres, &yres);
     fprintf(fp, "\nFPix Version %d\n", FPIX_VERSION_NUMBER);
-    fprintf(fp, "w = %d, h = %d, nbytes = %d\n", w, h, nbytes);
+    fprintf(fp, "w = %d, h = %d, nbytes = %u\n", w, h, nbytes);
     fprintf(fp, "xres = %d, yres = %d\n", xres, yres);
     fwrite(data, 1, nbytes, fp);
     fprintf(fp, "\n");
@@ -1867,8 +1880,8 @@ FPIX       *fpixt;
 /*!
  * \brief   fpixWriteMem()
  *
- * \param[out]   pdata data of serialized fpix
- * \param[out]   psize size of returned data
+ * \param[out]   pdata     data of serialized fpix
+ * \param[out]   psize     size of returned data
  * \param[in]    fpix
  * \return  0 if OK, 1 on error
  *
@@ -1877,7 +1890,7 @@ FPIX       *fpixt;
  *      (1) Serializes a fpix in memory and puts the result in a buffer.
  * </pre>
  */
-l_int32
+l_ok
 fpixWriteMem(l_uint8  **pdata,
              size_t    *psize,
              FPIX      *fpix)
@@ -1921,7 +1934,7 @@ FILE    *fp;
 /*!
  * \brief   fpixEndianByteSwap()
  *
- * \param[in]    fpixd can be equal to fpixs or NULL
+ * \param[in]    fpixd     can be equal to fpixs or NULL
  * \param[in]    fpixs
  * \return  fpixd always
  *
@@ -2013,7 +2026,7 @@ DPIX  *dpix;
 /*!
  * \brief   dpixReadStream()
  *
- * \param[in]    fp file stream
+ * \param[in]    fp      file stream
  * \return  dpix, or NULL on error
  */
 DPIX *
@@ -2065,8 +2078,8 @@ DPIX       *dpix;
 /*!
  * \brief   dpixReadMem()
  *
- * \param[in]    data  of serialized dpix
- * \param[in]    size  of data in bytes
+ * \param[in]    data     of serialized dpix
+ * \param[in]    size     of data in bytes
  * \return  dpix, or NULL on error
  */
 DPIX *
@@ -2097,7 +2110,7 @@ DPIX  *dpix;
  * \param[in]    dpix
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 dpixWrite(const char  *filename,
           DPIX        *dpix)
 {
@@ -2124,15 +2137,16 @@ FILE    *fp;
 /*!
  * \brief   dpixWriteStream()
  *
- * \param[in]    fp file stream opened for "wb"
+ * \param[in]    fp      file stream opened for "wb"
  * \param[in]    dpix
  * \return  0 if OK, 1 on error
  */
-l_int32
+l_ok
 dpixWriteStream(FILE  *fp,
                 DPIX  *dpix)
 {
-l_int32     w, h, nbytes, xres, yres;
+l_int32     w, h, xres, yres;
+l_uint32    nbytes;
 l_float64  *data;
 DPIX       *dpixt;
 
@@ -2149,9 +2163,9 @@ DPIX       *dpixt;
     dpixGetDimensions(dpixt, &w, &h);
     dpixGetResolution(dpixt, &xres, &yres);
     data = dpixGetData(dpixt);
-    nbytes = w * h * sizeof(l_float64);
+    nbytes = sizeof(l_float64) * w * h;
     fprintf(fp, "\nDPix Version %d\n", DPIX_VERSION_NUMBER);
-    fprintf(fp, "w = %d, h = %d, nbytes = %d\n", w, h, nbytes);
+    fprintf(fp, "w = %d, h = %d, nbytes = %u\n", w, h, nbytes);
     fprintf(fp, "xres = %d, yres = %d\n", xres, yres);
     fwrite(data, 1, nbytes, fp);
     fprintf(fp, "\n");
@@ -2164,8 +2178,8 @@ DPIX       *dpixt;
 /*!
  * \brief   dpixWriteMem()
  *
- * \param[out]   pdata data of serialized dpix
- * \param[out]   psize size of returned data
+ * \param[out]   pdata     data of serialized dpix
+ * \param[out]   psize     size of returned data
  * \param[in]    dpix
  * \return  0 if OK, 1 on error
  *
@@ -2174,7 +2188,7 @@ DPIX       *dpixt;
  *      (1) Serializes a dpix in memory and puts the result in a buffer.
  * </pre>
  */
-l_int32
+l_ok
 dpixWriteMem(l_uint8  **pdata,
              size_t    *psize,
              DPIX      *dpix)
@@ -2218,7 +2232,7 @@ FILE    *fp;
 /*!
  * \brief   dpixEndianByteSwap()
  *
- * \param[in]    dpixd can be equal to dpixs or NULL
+ * \param[in]    dpixd     can be equal to dpixs or NULL
  * \param[in]    dpixs
  * \return  dpixd always
  *
@@ -2283,9 +2297,9 @@ dpixEndianByteSwap(DPIX  *dpixd,
 /*!
  * \brief   fpixPrintStream()
  *
- * \param[in]    fp file stream
+ * \param[in]    fp       file stream
  * \param[in]    fpix
- * \param[in]    factor subsampled
+ * \param[in]    factor   for subsampling
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -2293,7 +2307,7 @@ dpixEndianByteSwap(DPIX  *dpixd,
  *      (1) Subsampled printout of fpix for debugging.
  * </pre>
  */
-l_int32
+l_ok
 fpixPrintStream(FILE    *fp,
                 FPIX    *fpix,
                 l_int32  factor)

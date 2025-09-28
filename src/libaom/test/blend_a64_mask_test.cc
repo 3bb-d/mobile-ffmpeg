@@ -249,12 +249,6 @@ TEST_P(BlendA64MaskTest8B, DISABLED_Speed) {
 INSTANTIATE_TEST_CASE_P(SSE4_1, BlendA64MaskTest8B,
                         ::testing::Values(TestFuncs(
                             aom_blend_a64_mask_c, aom_blend_a64_mask_sse4_1)));
-#endif  // HAVE_AVX2
-
-#if HAVE_AVX2
-INSTANTIATE_TEST_CASE_P(AVX2, BlendA64MaskTest8B,
-                        ::testing::Values(TestFuncs(aom_blend_a64_mask_sse4_1,
-                                                    aom_blend_a64_mask_avx2)));
 #endif  // HAVE_SSE4_1
 
 #if HAVE_AVX2
@@ -371,7 +365,7 @@ INSTANTIATE_TEST_CASE_P(
 //////////////////////////////////////////////////////////////////////////////
 // High bit-depth version
 //////////////////////////////////////////////////////////////////////////////
-
+#if CONFIG_AV1_HIGHBITDEPTH
 typedef void (*FHBD)(uint8_t *dst, uint32_t dst_stride, const uint8_t *src0,
                      uint32_t src0_stride, const uint8_t *src1,
                      uint32_t src1_stride, const uint8_t *mask,
@@ -622,4 +616,5 @@ INSTANTIATE_TEST_CASE_P(
                                    aom_highbd_blend_a64_mask_avx2)));
 #endif  // HAVE_AVX2
 #endif
+#endif  // CONFIG_AV1_HIGHBITDEPTH
 }  // namespace

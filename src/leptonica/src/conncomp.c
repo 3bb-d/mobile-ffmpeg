@@ -34,29 +34,29 @@
  *      4- and 8-connected components: counts, bounding boxes and images
  *
  *      Top-level calls:
- *           BOXA     *pixConnComp()
- *           BOXA     *pixConnCompPixa()
- *           BOXA     *pixConnCompBB()
- *           l_int32   pixCountConnComp()
+ *            BOXA     *pixConnComp()
+ *            BOXA     *pixConnCompPixa()
+ *            BOXA     *pixConnCompBB()
+ *            l_int32   pixCountConnComp()
  *
  *      Identify the next c.c. to be erased:
- *           l_int32   nextOnPixelInRaster()
- *           l_int32   nextOnPixelInRasterLow()
+ *            l_int32   nextOnPixelInRaster()
+ *    static  l_int32   nextOnPixelInRasterLow()
  *
  *      Erase the c.c., saving the b.b.:
- *           BOX      *pixSeedfillBB()
- *           BOX      *pixSeedfill4BB()
- *           BOX      *pixSeedfill8BB()
+ *            BOX      *pixSeedfillBB()
+ *            BOX      *pixSeedfill4BB()
+ *            BOX      *pixSeedfill8BB()
  *
  *      Just erase the c.c.:
- *           l_int32   pixSeedfill()
- *           l_int32   pixSeedfill4()
- *           l_int32   pixSeedfill8()
+ *            l_int32   pixSeedfill()
+ *            l_int32   pixSeedfill4()
+ *            l_int32   pixSeedfill8()
  *
  *      Static stack helper functions for single raster line seedfill:
- *           static void    pushFillsegBB()
- *           static void    pushFillseg()
- *           static void    popFillseg()
+ *            static void    pushFillsegBB()
+ *            static void    pushFillseg()
+ *            static void    popFillseg()
  *
  *  The basic method in pixConnCompBB() is very simple.  We scan the
  *  image in raster order, looking for the next ON pixel.  When it
@@ -105,6 +105,9 @@ struct FillSeg
 };
 typedef struct FillSeg    FILLSEG;
 
+static l_int32 nextOnPixelInRasterLow(l_uint32 *data, l_int32 w, l_int32 h,
+                                      l_int32 wpl, l_int32 xstart,
+                                      l_int32 ystart, l_int32 *px, l_int32 *py);
 
     /* Static accessors for FillSegs on a stack */
 static void pushFillsegBB(L_STACK *stack, l_int32 xleft, l_int32 xright,
@@ -128,9 +131,9 @@ static void popFillseg(L_STACK *stack, l_int32 *pxleft, l_int32 *pxright,
 /*!
  * \brief   pixConnComp()
  *
- * \param[in]    pixs 1 bpp
- * \param[out]   ppixa   [optional] pixa of each c.c.
- * \param[in]    connectivity 4 or 8
+ * \param[in]    pixs           1 bpp
+ * \param[out]   ppixa          [optional] pixa of each c.c.
+ * \param[in]    connectivity   4 or 8
  * \return  boxa, or NULL on error
  *
  * <pre>
@@ -149,10 +152,8 @@ pixConnComp(PIX     *pixs,
     PROCNAME("pixConnComp");
 
     if (ppixa) *ppixa = NULL;
-    if (!pixs)
-        return (BOXA *)ERROR_PTR("pixs not defined", procName, NULL);
-    if (pixGetDepth(pixs) != 1)
-        return (BOXA *)ERROR_PTR("pixs not 1 bpp", procName, NULL);
+    if (!pixs || pixGetDepth(pixs) != 1)
+        return (BOXA *)ERROR_PTR("pixs undefined or not 1 bpp", procName, NULL);
     if (connectivity != 4 && connectivity != 8)
         return (BOXA *)ERROR_PTR("connectivity not 4 or 8", procName, NULL);
 
@@ -166,9 +167,9 @@ pixConnComp(PIX     *pixs,
 /*!
  * \brief   pixConnCompPixa()
  *
- * \param[in]    pixs 1 bpp
- * \param[out]   ppixa pixa of each c.c.
- * \param[in]    connectivity 4 or 8
+ * \param[in]    pixs           1 bpp
+ * \param[out]   ppixa          pixa of each c.c.
+ * \param[in]    connectivity   4 or 8
  * \return  boxa, or NULL on error
  *
  * <pre>
@@ -218,6 +219,7 @@ L_STACK  *stack, *auxstack;
     if (iszero)
         return boxaCreate(1);  /* return empty boxa and empty pixa */
 
+    pixSetPadBits(pixs, 0);
     pix1 = pixCopy(NULL, pixs);
     pix2 = pixCopy(NULL, pixs);
     if (!pix1 || !pix2) {
@@ -287,8 +289,8 @@ cleanup:
 /*!
  * \brief   pixConnCompBB()
  *
- * \param[in]    pixs 1 bpp
- * \param[in]    connectivity 4 or 8
+ * \param[in]    pixs           1 bpp
+ * \param[in]    connectivity   4 or 8
  * \return  boxa, or NULL on error
  *
  * <pre>
@@ -325,6 +327,7 @@ L_STACK  *stack, *auxstack;
     if (iszero)
         return boxaCreate(1);  /* return empty boxa */
 
+    pixSetPadBits(pixs, 0);
     if ((pix1 = pixCopy(NULL, pixs)) == NULL)
         return (BOXA *)ERROR_PTR("pix1 not made", procName, NULL);
 
@@ -372,8 +375,8 @@ cleanup:
 /*!
  * \brief   pixCountConnComp()
  *
- * \param[in]    pixs 1 bpp
- * \param[in]    connectivity 4 or 8
+ * \param[in]    pixs           1 bpp
+ * \param[in]    connectivity   4 or 8
  * \param[out]   pcount
  * \return  0 if OK, 1 on error
  *
@@ -383,7 +386,7 @@ cleanup:
  *     2 It works on a copy of the input pix.  The c.c. are located
  *         in raster order and erased one at a time.
  */
-l_int32
+l_ok
 pixCountConnComp(PIX      *pixs,
                  l_int32   connectivity,
                  l_int32  *pcount)
@@ -408,6 +411,7 @@ L_STACK  *stack, *auxstack;
     if (iszero)
         return 0;
 
+    pixSetPadBits(pixs, 0);
     if ((pix1 = pixCopy(NULL, pixs)) == NULL)
         return ERROR_INT("pix1 not made", procName, 1);
     h = pixGetHeight(pixs);
@@ -440,9 +444,9 @@ L_STACK  *stack, *auxstack;
 /*!
  * \brief   nextOnPixelInRaster()
  *
- * \param[in]    pixs 1 bpp
- * \param[in]    xstart, ystart  starting point for search
- * \param[out]   px, py  coord value of next ON pixel
+ * \param[in]    pixs             1 bpp
+ * \param[in]    xstart, ystart   starting point for search
+ * \param[out]   px, py           coord value of next ON pixel
  * \return  1 if a pixel is found; 0 otherwise or on error
  */
 l_int32
@@ -472,14 +476,14 @@ l_uint32  *data;
 /*!
  * \brief   nextOnPixelInRasterLow()
  *
- * \param[in]    data pix data
- * \param[in]    w, h width and height
- * \param[in]    wpl  words per line
- * \param[in]    xstart, ystart  starting point for search
- * \param[out]   px, py  coord value of next ON pixel
+ * \param[in]    data             pix data
+ * \param[in]    w, h             width and height
+ * \param[in]    wpl              words per line
+ * \param[in]    xstart, ystart   starting point for search
+ * \param[out]   px, py           coord value of next ON pixel
  * \return  1 if a pixel is found; 0 otherwise or on error
  */
-l_int32
+static l_int32
 nextOnPixelInRasterLow(l_uint32  *data,
                        l_int32    w,
                        l_int32    h,
@@ -544,10 +548,10 @@ l_uint32  *line, *pword;
 /*!
  * \brief   pixSeedfillBB()
  *
- * \param[in]    pixs 1 bpp
- * \param[in]    stack for holding fillsegs
- * \param[in]    x,y   location of seed pixel
- * \param[in]    connectivity  4 or 8
+ * \param[in]    pixs           1 bpp
+ * \param[in]    stack          for holding fillsegs
+ * \param[in]    x,y            location of seed pixel
+ * \param[in]    connectivity   4 or 8
  * \return  box or NULL on error
  *
  * <pre>
@@ -591,9 +595,9 @@ BOX  *box;
 /*!
  * \brief   pixSeedfill4BB()
  *
- * \param[in]    pixs 1 bpp
- * \param[in]    stack for holding fillsegs
- * \param[in]    x,y   location of seed pixel
+ * \param[in]    pixs     1 bpp
+ * \param[in]    stack    for holding fillsegs
+ * \param[in]    x,y      location of seed pixel
  * \return  box or NULL on error.
  *
  * <pre>
@@ -713,9 +717,9 @@ BOX       *box;
 /*!
  * \brief   pixSeedfill8BB()
  *
- * \param[in]    pixs 1 bpp
- * \param[in]    stack for holding fillsegs
- * \param[in]    x,y   location of seed pixel
+ * \param[in]    pixs    1 bpp
+ * \param[in]    stack   for holding fillsegs
+ * \param[in]    x,y     location of seed pixel
  * \return  box or NULL on error.
  *
  * <pre>
@@ -828,10 +832,10 @@ BOX       *box;
 /*!
  * \brief   pixSeedfill()
  *
- * \param[in]    pixs 1 bpp
- * \param[in]    stack for holding fillsegs
- * \param[in]    x,y   location of seed pixel
- * \param[in]    connectivity  4 or 8
+ * \param[in]    pixs           1 bpp
+ * \param[in]    stack          for holding fillsegs
+ * \param[in]    x,y            location of seed pixel
+ * \param[in]    connectivity   4 or 8
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -840,7 +844,7 @@ BOX       *box;
  *      (2) See pixSeedfill4() and pixSeedfill8() for details.
  * </pre>
  */
-l_int32
+l_ok
 pixSeedfill(PIX      *pixs,
             L_STACK  *stack,
             l_int32   x,
@@ -870,9 +874,9 @@ l_int32  retval;
 /*!
  * \brief   pixSeedfill4()
  *
- * \param[in]    pixs 1 bpp
- * \param[in]    stack for holding fillsegs
- * \param[in]    x,y   location of seed pixel
+ * \param[in]    pixs    1 bpp
+ * \param[in]    stack   for holding fillsegs
+ * \param[in]    x,y     location of seed pixel
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -884,7 +888,7 @@ l_int32  retval;
  *      (3) Reference: see pixSeedFill4BB()
  * </pre>
  */
-l_int32
+l_ok
 pixSeedfill4(PIX      *pixs,
              L_STACK  *stack,
              l_int32   x,
@@ -964,9 +968,9 @@ l_uint32  *data, *line;
 /*!
  * \brief   pixSeedfill8()
  *
- * \param[in]    pixs 1 bpp
- * \param[in]    stack for holding fillsegs
- * \param[in]    x,y   location of seed pixel
+ * \param[in]    pixs    1 bpp
+ * \param[in]    stack   for holding fillsegs
+ * \param[in]    x,y     location of seed pixel
  * \return  0 if OK, 1 on error
  *
  * <pre>
@@ -978,7 +982,7 @@ l_uint32  *data, *line;
  *      (3) Reference: see pixSeedFill8BB()
  * </pre>
  */
-l_int32
+l_ok
 pixSeedfill8(PIX      *pixs,
              L_STACK  *stack,
              l_int32   x,
@@ -1067,10 +1071,10 @@ l_uint32  *data, *line;
  * \param[in]    y
  * \param[in]    dy
  * \param[in]    ymax
- * \param[out]   pminx minimum x
- * \param[out]   pmaxx maximum x
- * \param[out]   pminy minimum y
- * \param[out]   pmaxy maximum y
+ * \param[out]   pminx            minimum x
+ * \param[out]   pmaxx            maximum x
+ * \param[out]   pminy            minimum y
+ * \param[out]   pmaxy            maximum y
  * \return  void
  *
  * <pre>
@@ -1200,10 +1204,10 @@ L_STACK  *auxstack;
  * \brief   popFillseg()
  *
  * \param[in]    stack
- * \param[out]   pxleft left x
- * \param[out]   pxright right x
- * \param[out]   py y coordinate
- * \param[out]   pdy delta y
+ * \param[out]   pxleft    left x
+ * \param[out]   pxright   right x
+ * \param[out]   py        y coordinate
+ * \param[out]   pdy       delta y
  * \return  void
  *
  * <pre>

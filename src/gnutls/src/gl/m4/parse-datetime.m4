@@ -1,5 +1,5 @@
-# parse-datetime.m4 serial 21
-dnl Copyright (C) 2002-2006, 2008-2016 Free Software Foundation, Inc.
+# parse-datetime.m4 serial 23
+dnl Copyright (C) 2002-2006, 2008-2020 Free Software Foundation, Inc.
 dnl This file is free software; the Free Software Foundation
 dnl gives unlimited permission to copy and/or distribute it,
 dnl with or without modifications, as long as this notice is preserved.
@@ -26,6 +26,37 @@ AC_DEFUN([gl_C_COMPOUND_LITERALS],
 
 AC_DEFUN([gl_PARSE_DATETIME],
 [
+  dnl parse-datetime.c is generated from parse-datetime.y. It requires bison,
+  dnl because parse-datetime.y uses bison specific features. It requires at
+  dnl least bison-2.4 for %define api.pure.
+  dnl bison is only needed for the maintainer (who touches parse-datetime.y).
+  dnl But in order to avoid separate Makefiles or --enable-maintainer-mode,
+  dnl we put the rule in general Makefile. Now, some people carelessly touch
+  dnl the files or have a broken "make" program, hence the parse-datetime.c
+  dnl rule will sometimes fire. To avoid an error, defines PARSE_DATETIME_BISON
+  dnl to ":" if it is not present or too old.
+  AC_CHECK_PROGS([PARSE_DATETIME_BISON], [bison])
+  if test -z "$PARSE_DATETIME_BISON"; then
+    ac_verc_fail=yes
+  else
+    dnl Found it, now check the version.
+    AC_MSG_CHECKING([version of bison])
+changequote(<<,>>)dnl
+    ac_prog_version=`$PARSE_DATETIME_BISON --version 2>&1 | sed -n 's/^.*GNU Bison.* \([0-9]*\.[0-9.]*\).*$/\1/p'`
+    case $ac_prog_version in
+      '') ac_prog_version="v. ?.??, bad"; ac_verc_fail=yes;;
+      1.* | 2.[0-3] | 2.[0-3].*)
+changequote([,])dnl
+         ac_prog_version="$ac_prog_version, bad"; ac_verc_fail=yes;;
+      *) ac_prog_version="$ac_prog_version, ok"; ac_verc_fail=no;;
+    esac
+    AC_MSG_RESULT([$ac_prog_version])
+  fi
+  if test $ac_verc_fail = yes; then
+    PARSE_DATETIME_BISON=:
+  fi
+  AC_SUBST([PARSE_DATETIME_BISON])
+
   dnl Prerequisites of lib/parse-datetime.h.
   AC_REQUIRE([AM_STDBOOL_H])
   AC_REQUIRE([gl_TIMESPEC])
@@ -36,20 +67,4 @@ AC_DEFUN([gl_PARSE_DATETIME],
   AC_STRUCT_TIMEZONE
   AC_REQUIRE([gl_CLOCK_TIME])
   AC_REQUIRE([gl_TM_GMTOFF])
-  AC_COMPILE_IFELSE(
-    [AC_LANG_SOURCE([[
-#include <time.h> /* for time_t */
-#include <limits.h> /* for CHAR_BIT, LONG_MIN, LONG_MAX */
-#define TYPE_MINIMUM(t) \
-  ((t) ((t) 0 < (t) -1 ? (t) 0 : ~ TYPE_MAXIMUM (t)))
-#define TYPE_MAXIMUM(t) \
-  ((t) ((t) 0 < (t) -1 \
-        ? (t) -1 \
-        : ((((t) 1 << (sizeof (t) * CHAR_BIT - 2)) - 1) * 2 + 1)))
-typedef int verify_min[2 * (LONG_MIN <= TYPE_MINIMUM (time_t)) - 1];
-typedef int verify_max[2 * (TYPE_MAXIMUM (time_t) <= LONG_MAX) - 1];
-       ]])],
-    [AC_DEFINE([TIME_T_FITS_IN_LONG_INT], [1],
-       [Define to 1 if all 'time_t' values fit in a 'long int'.])
-    ])
 ])

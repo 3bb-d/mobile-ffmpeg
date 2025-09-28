@@ -16,7 +16,7 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>
  *
  */
 
@@ -74,7 +74,7 @@ int _gnutls_read_pbkdf1_params(const uint8_t * data, int data_size,
 		goto error;
 	}
 
-	if (kdf_params->iter_count >= INT_MAX || kdf_params->iter_count == 0) {
+	if (kdf_params->iter_count >= MAX_ITER_COUNT || kdf_params->iter_count == 0) {
 		ret = gnutls_assert_val(GNUTLS_E_ILLEGAL_PARAMETER);
 		goto error;
 	}
@@ -135,16 +135,20 @@ _gnutls_decrypt_pbes1_des_md5_data(const char *password,
 			   unsigned password_len,
 			   const struct pbkdf2_params *kdf_params,
 			   const struct pbe_enc_params *enc_params,
-			   gnutls_datum_t *encrypted_data, /* we re-use it */
+			   const gnutls_datum_t *encrypted_data,
 			   gnutls_datum_t *decrypted_data)
 {
 	int result;
 	gnutls_datum_t dkey, d_iv;
 	cipher_hd_st ch;
 	uint8_t key[16];
+	const unsigned block_size = 8;
 
 	if (enc_params->cipher != GNUTLS_CIPHER_DES_CBC)
 		return gnutls_assert_val(GNUTLS_E_INTERNAL_ERROR);
+
+	if (encrypted_data->size % block_size != 0)
+		return gnutls_assert_val(GNUTLS_E_ILLEGAL_PARAMETER);
 
 	/* generate the key
 	 */

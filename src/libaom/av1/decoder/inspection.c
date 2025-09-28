@@ -33,7 +33,7 @@ void ifd_clear(insp_frame_data *fd) {
 
 /* TODO(negge) This function may be called by more than one thread when using
                a multi-threaded decoder and this may cause a data race. */
-int ifd_inspect(insp_frame_data *fd, void *decoder) {
+int ifd_inspect(insp_frame_data *fd, void *decoder, int skip_not_transform) {
   struct AV1Decoder *pbi = (struct AV1Decoder *)decoder;
   AV1_COMMON *const cm = &pbi->common;
 
@@ -68,7 +68,7 @@ int ifd_inspect(insp_frame_data *fd, void *decoder) {
   }
   for (j = 0; j < cm->mi_rows; j++) {
     for (i = 0; i < cm->mi_cols; i++) {
-      const MB_MODE_INFO *mbmi = cm->mi_grid_visible[j * cm->mi_stride + i];
+      const MB_MODE_INFO *mbmi = cm->mi_grid_base[j * cm->mi_stride + i];
       insp_mi_data *mi = &fd->mi_grid[j * cm->mi_cols + i];
       // Segment
       mi->segment_id = mbmi->segment_id;
@@ -82,6 +82,9 @@ int ifd_inspect(insp_frame_data *fd, void *decoder) {
       mi->ref_frame[1] = mbmi->ref_frame[1];
       // Prediction Mode
       mi->mode = mbmi->mode;
+      mi->intrabc = (int16_t)mbmi->use_intrabc;
+      mi->palette = (int16_t)mbmi->palette_mode_info.palette_size[0];
+      mi->uv_palette = (int16_t)mbmi->palette_mode_info.palette_size[1];
       // Prediction Mode for Chromatic planes
       if (mi->mode < INTRA_MODES) {
         mi->uv_mode = mbmi->uv_mode;
@@ -111,13 +114,26 @@ int ifd_inspect(insp_frame_data *fd, void *decoder) {
       else
         mi->tx_size = mbmi->tx_size;
 
-      mi->tx_type =
-          (mi->skip ? 0 : mbmi->txk_type[av1_get_txk_type_index(bsize, r, c)]);
+      if (skip_not_transform && mi->skip) mi->tx_size = -1;
+
+      if (mi->skip) {
+        const int tx_type_row = j - j % tx_size_high_unit[mi->tx_size];
+        const int tx_type_col = i - i % tx_size_wide_unit[mi->tx_size];
+        const int tx_type_map_idx = tx_type_row * cm->mi_stride + tx_type_col;
+        mi->tx_type = cm->tx_type_map[tx_type_map_idx];
+      } else {
+        mi->tx_type = 0;
+      }
+
+      if (skip_not_transform &&
+          (mi->skip || mbmi->tx_skip[av1_get_txk_type_index(bsize, r, c)]))
+        mi->tx_type = -1;
 
       mi->cdef_level = cm->cdef_info.cdef_strengths[mbmi->cdef_strength] /
                        CDEF_SEC_STRENGTHS;
       mi->cdef_strength = cm->cdef_info.cdef_strengths[mbmi->cdef_strength] %
                           CDEF_SEC_STRENGTHS;
+
       mi->cdef_strength += mi->cdef_strength == 3;
       if (mbmi->uv_mode == UV_CFL_PRED) {
         mi->cfl_alpha_idx = mbmi->cfl_alpha_idx;
